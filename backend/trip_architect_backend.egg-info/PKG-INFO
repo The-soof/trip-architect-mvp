@@ -1,0 +1,26 @@
+Metadata-Version: 2.4
+Name: trip-architect-backend
+Version: 0.1.0
+Summary: Backend API for the Trip Architect travel planning MVP.
+Requires-Python: >=3.11
+Requires-Dist: fastapi<1.0.0,>=0.115.0
+Requires-Dist: uvicorn[standard]<1.0.0,>=0.30.0
+Requires-Dist: sqlalchemy<3.0.0,>=2.0.32
+Requires-Dist: pydantic<3.0.0,>=2.8.2
+Requires-Dist: pydantic-settings<3.0.0,>=2.4.0
+Requires-Dist: python-jose[cryptography]<4.0.0,>=3.3.0
+Requires-Dist: passlib[bcrypt]<2.0.0,>=1.7.4
+Requires-Dist: email-validator<3.0.0,>=2.2.0
+Requires-Dist: python-multipart<1.0.0,>=0.0.9
+Requires-Dist: deepagents>=0.6.4
+Requires-Dist: langchain>=1.3.2
+Requires-Dist: langchain-google-genai>=3.1.0
+Requires-Dist: langchain-tavily>=0.2.12
+Requires-Dist: tavily-python>=0.7.24
+Provides-Extra: prod
+Requires-Dist: psycopg[binary]<4.0.0,>=3.2.1; extra == "prod"
+Provides-Extra: dev
+Requires-Dist: httpx<1.0.0,>=0.27.0; extra == "dev"
+Requires-Dist: pytest<9.0.0,>=8.3.2; extra == "dev"
+Requires-Dist: pytest-cov<6.0.0,>=5.0.0; extra == "dev"
+Requires-Dist: ruff<1.0.0,>=0.6.2; extra == "dev"

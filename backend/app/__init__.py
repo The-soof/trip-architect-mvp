@@ -1,0 +1,2 @@
+"""Trip Architect backend package."""
+
