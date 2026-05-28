@@ -11,6 +11,22 @@ from app.services.agent_planner import TripPlanner
 from app.services.job_runner import submit_background_job
 
 
+def _bounded_text(value: object, max_length: int, default: str = "") -> str:
+    text = " ".join(str(value or default).split())
+    if not text:
+        text = default
+    return text[:max_length]
+
+
+def _bounded_confidence(value: object) -> str:
+    text = _bounded_text(value, 32, "medium")
+    lowered = text.lower()
+    for label in ("low", "medium", "high"):
+        if label in lowered:
+            return label
+    return text
+
+
 def _trip_query():
     return (
         select(TripRequest)
@@ -83,16 +99,16 @@ def _run_trip_options_generation(trip_id: str) -> None:
             db.add(
                 TripOption(
                     trip_request_id=trip.id,
-                    name=option["name"],
+                    name=_bounded_text(option["name"], 160, "Trip option"),
                     summary=option["summary"],
                     rationale=option["rationale"],
                     tradeoffs=option["tradeoffs"],
                     destination_order=option["destination_order"],
                     days_by_stop=option["days_by_stop"],
-                    pace_label=option["pace_label"],
+                    pace_label=_bounded_text(option["pace_label"], 40, "Balanced"),
                     estimated_total_min=option["estimated_total_min"],
                     estimated_total_max=option["estimated_total_max"],
-                    budget_confidence=option["budget_confidence"],
+                    budget_confidence=_bounded_confidence(option["budget_confidence"]),
                     fit_score=option["fit_score"],
                 )
             )
@@ -157,7 +173,7 @@ def _run_itinerary_generation(trip_id: str, option_id: str) -> None:
         itinerary = Itinerary(
             trip_request_id=trip.id,
             trip_option_id=selected_option.id,
-            title=itinerary_artifacts.itinerary["title"],
+            title=_bounded_text(itinerary_artifacts.itinerary["title"], 200, "Trip itinerary"),
             overview=itinerary_artifacts.itinerary["overview"],
             logistics=itinerary_artifacts.itinerary["logistics"],
             neighborhood_guidance=itinerary_artifacts.itinerary["neighborhood_guidance"],
@@ -170,8 +186,8 @@ def _run_itinerary_generation(trip_id: str, option_id: str) -> None:
                 ItineraryDay(
                     itinerary_id=itinerary.id,
                     day_number=day["day_number"],
-                    city=day["city"],
-                    theme=day["theme"],
+                    city=_bounded_text(day["city"], 120, "Destination"),
+                    theme=_bounded_text(day["theme"], 160, "Day plan"),
                     morning=day["morning"],
                     afternoon=day["afternoon"],
                     evening=day["evening"],
@@ -184,9 +200,36 @@ def _run_itinerary_generation(trip_id: str, option_id: str) -> None:
         db.query(HotelOption).filter(HotelOption.trip_option_id == selected_option.id).delete()
 
         for flight in itinerary_artifacts.flights:
-            db.add(FlightOption(trip_request_id=trip.id, trip_option_id=selected_option.id, **flight))
+            db.add(
+                FlightOption(
+                    trip_request_id=trip.id,
+                    trip_option_id=selected_option.id,
+                    carrier=_bounded_text(flight["carrier"], 120, "Flight option"),
+                    route_summary=_bounded_text(flight["route_summary"], 200, "Route"),
+                    price=flight["price"],
+                    stops=flight["stops"],
+                    comfort_label=_bounded_text(flight["comfort_label"], 40, "Best fit"),
+                    source_name=_bounded_text(flight["source_name"], 60, "Flight source"),
+                    booking_url=flight["booking_url"],
+                    match_reason=flight["match_reason"],
+                )
+            )
         for hotel in itinerary_artifacts.hotels:
-            db.add(HotelOption(trip_request_id=trip.id, trip_option_id=selected_option.id, **hotel))
+            db.add(
+                HotelOption(
+                    trip_request_id=trip.id,
+                    trip_option_id=selected_option.id,
+                    city=_bounded_text(hotel["city"], 120, "Destination"),
+                    name=_bounded_text(hotel["name"], 160, "Hotel option"),
+                    neighborhood=_bounded_text(hotel["neighborhood"], 160, "Central"),
+                    nightly_rate=hotel["nightly_rate"],
+                    rating=hotel["rating"],
+                    style_label=_bounded_text(hotel["style_label"], 80, "Recommended stay"),
+                    source_name=_bounded_text(hotel["source_name"], 60, "Hotel source"),
+                    booking_url=hotel["booking_url"],
+                    match_reason=hotel["match_reason"],
+                )
+            )
 
         trip.status = "saved" if trip.saved_trip is not None else "selected"
 

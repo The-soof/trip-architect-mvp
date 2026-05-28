@@ -3,7 +3,7 @@ import time
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.services.agent_planner import _normalize_days_by_stop
+from app.services.agent_planner import PlanningArtifacts, _normalize_days_by_stop
 
 
 def register_user(client: TestClient) -> dict:
@@ -291,6 +291,43 @@ def test_trip_planning_records_fallback_reason_when_live_agent_fails(client: Tes
         "The live DeepSeek-compatible endpoint is currently unavailable"
     )
     assert trip["agent_runs"][0]["steps"][-1]["agent"] == "fallback-guard"
+
+
+def test_trip_planning_bounds_deep_agent_enum_text(client: TestClient, monkeypatch) -> None:
+    token = register_user(client)["access_token"]
+
+    def fake_deep_agent_options(*args, **kwargs):
+        return PlanningArtifacts(
+            mode="deepagents",
+            planning_summary="Agent produced verbose labels.",
+            options=[
+                {
+                    "name": "Barcelona food weekend",
+                    "summary": "A tight Barcelona plan.",
+                    "rationale": "Matches the form input.",
+                    "tradeoffs": ["Short trip from the west coast."],
+                    "destination_order": ["Barcelona"],
+                    "days_by_stop": [{"city": "Barcelona", "nights": 10, "start_day": 1, "end_day": 10}],
+                    "pace_label": "Balanced but with long relaxed evening buffers and optional cafe stops",
+                    "estimated_total_min": 2400,
+                    "estimated_total_max": 3600,
+                    "budget_confidence": "Medium confidence because June hotel pricing can swing by neighborhood",
+                    "fit_score": 9.1,
+                }
+            ],
+            sources=[],
+            steps=[],
+        )
+
+    monkeypatch.setattr("app.services.agent_planner.TripPlanner.generate_trip_options", fake_deep_agent_options)
+
+    response = client.post("/api/trips", headers=auth_headers(token), json=trip_payload())
+
+    assert response.status_code == 202
+    trip = wait_for_trip(client, token, response.json()["id"], lambda payload: payload["status"] == "planned")
+    assert trip["planning_mode"] == "deepagents"
+    assert len(trip["options"][0]["pace_label"]) <= 40
+    assert trip["options"][0]["budget_confidence"] == "medium"
 
 
 def test_trip_create_returns_pending_workspace_when_background_job_is_not_run(
