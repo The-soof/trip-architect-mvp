@@ -342,6 +342,7 @@ def _build_tavily_tool(settings: Settings):
     from tavily import TavilyClient
 
     tavily_client = TavilyClient(api_key=settings.tavily_api_key)
+    search_count = 0
 
     @tool("internet_search")
     def internet_search(
@@ -351,17 +352,35 @@ def _build_tavily_tool(settings: Settings):
         include_raw_content: bool = False,
     ) -> dict[str, Any]:
         """Run a Tavily web search for current travel facts, logistics, prices, and destination research."""
+        nonlocal search_count
+        capped_results = min(max_results, 3 if settings.fast_mvp_mode else 5)
+        if settings.fast_mvp_mode and search_count >= settings.fast_mvp_search_limit:
+            _log_agent_event(
+                "tool",
+                "internet_search_skipped",
+                query=query,
+                reason="fast_mvp_search_budget_exhausted",
+                budget=settings.fast_mvp_search_limit,
+            )
+            return {
+                "results": [],
+                "answer": "",
+                "query": query,
+                "budget_exhausted": True,
+            }
+        search_count += 1
         _log_agent_event(
             "tool",
             "internet_search_started",
             query=query,
-            max_results=max_results,
+            max_results=capped_results,
             topic=topic,
             include_raw_content=include_raw_content,
+            search_count=search_count,
         )
         result = tavily_client.search(
             query=query,
-            max_results=max_results,
+            max_results=capped_results,
             topic=topic,
             include_raw_content=include_raw_content,
         )
@@ -370,6 +389,7 @@ def _build_tavily_tool(settings: Settings):
             "internet_search_completed",
             query=query,
             results_count=len(result.get("results", [])),
+            search_count=search_count,
         )
         return result
 
@@ -739,10 +759,16 @@ class TripPlanner:
 
         tavily_search_tool = _build_tavily_tool(self.settings)
         chat_model = _build_chat_model(self.settings)
+        max_searches = self.settings.fast_mvp_search_limit if self.settings.fast_mvp_mode else 6
+        max_steps = 8 if self.settings.fast_mvp_mode else 24
         direct_search_guidance = (
-            "This is a narrow request; do not delegate to the built-in task tool. Use internet_search directly and finish quickly."
-            if len(payload.destination_candidates) <= 2
-            else "Use the built-in task tool only for genuinely independent research branches; otherwise use internet_search directly."
+            "Temporary fast MVP mode is active. Do not use the built-in task tool. Use internet_search directly, stop after the minimum evidence needed, and finish quickly."
+            if self.settings.fast_mvp_mode
+            else (
+                "This is a narrow request; do not delegate to the built-in task tool. Use internet_search directly and finish quickly."
+                if len(payload.destination_candidates) <= 2
+                else "Use the built-in task tool only for genuinely independent research branches; otherwise use internet_search directly."
+            )
         )
 
         agent = create_deep_agent(
@@ -756,7 +782,7 @@ class TripPlanner:
                 "with only the structured response requested by the schema. Make 3 to 5 distinct options unless the user's candidates "
                 "make fewer options more honest. Every option must be feasible for the dates, traveler count, budget, origin, and pace. "
                 "Use real source URLs when Tavily provides them, and keep estimates transparent rather than overconfident. "
-                "Keep the run compact: prefer 3-6 targeted searches, avoid broad research loops, and complete the final JSON promptly. "
+                f"Keep the run compact: prefer 2-3 targeted searches, never exceed {max_searches} internet searches, avoid broad research loops, and complete the final JSON promptly. "
                 f"{direct_search_guidance}"
             ),
             response_format=DeepTripOptionsPayload,
@@ -774,7 +800,7 @@ class TripPlanner:
                             "pace_label, estimated_total_min, estimated_total_max, budget_confidence, and fit_score. "
                             "Each days_by_stop item must be an object with city, nights, start_day, and end_day. "
                             "Each source must include title, url, category, and evidence_type. "
-                            "Keep this run compact and do not exceed six tool calls unless absolutely necessary. "
+                            f"Temporary fast MVP mode is active. Use at most {max_searches} internet searches total and do not call the task tool. "
                             f"{direct_search_guidance} "
                             f"Origin: {payload.origin}. Dates: {payload.start_date} to {payload.end_date}. "
                             f"Candidates: {', '.join(payload.destination_candidates)}. "
@@ -785,6 +811,7 @@ class TripPlanner:
                 ]
             },
             "trip_options",
+            max_steps=max_steps,
         )
         structured = _structured_response_from_result(result, DeepTripOptionsPayload)
         trip_days = _trip_length(payload)
@@ -814,10 +841,16 @@ class TripPlanner:
 
         tavily_search_tool = _build_tavily_tool(self.settings)
         chat_model = _build_chat_model(self.settings)
+        max_searches = self.settings.fast_mvp_search_limit if self.settings.fast_mvp_mode else 6
+        max_steps = 10 if self.settings.fast_mvp_mode else 24
         direct_search_guidance = (
-            "Do not delegate to the built-in task tool for this itinerary. Use internet_search directly and finish quickly."
-            if len(selected_option.get("destination_order", [])) <= 2
-            else "Use the built-in task tool only for independent multi-stop research branches; otherwise use internet_search directly."
+            "Temporary fast MVP mode is active. Do not use the built-in task tool. Use internet_search directly, keep research narrow, and finish quickly."
+            if self.settings.fast_mvp_mode
+            else (
+                "Do not delegate to the built-in task tool for this itinerary. Use internet_search directly and finish quickly."
+                if len(selected_option.get("destination_order", [])) <= 2
+                else "Use the built-in task tool only for independent multi-stop research branches; otherwise use internet_search directly."
+            )
         )
 
         agent = create_deep_agent(
@@ -830,7 +863,7 @@ class TripPlanner:
                 "signals, transfer friction, and practical booking context. Work freely with your tools, then finish with only the structured "
                 "response requested by the schema. Keep each day specific, realistic, and paced for humans. Preserve slack around arrivals, "
                 "do not invent fake hotel names as sources, and cite real source URLs when Tavily provides them. "
-                "Keep the run compact: prefer 3-6 targeted searches, avoid broad research loops, and complete the final JSON promptly. "
+                f"Keep the run compact: prefer 2-3 targeted searches, never exceed {max_searches} internet searches, avoid broad research loops, and complete the final JSON promptly. "
                 f"{direct_search_guidance}"
             ),
             response_format=DeepItineraryPayload,
@@ -847,7 +880,7 @@ class TripPlanner:
                             "Each day must include day_number, city, theme, morning, afternoon, evening, logistics_note, and flexibility_note. "
                             "Each neighborhood guidance item must include city, recommended_area, and why. "
                             "Each source must include title, url, category, and evidence_type. "
-                            "Keep this run compact and do not exceed six tool calls unless absolutely necessary. "
+                            f"Temporary fast MVP mode is active. Use at most {max_searches} internet searches total and do not call the task tool. "
                             f"{direct_search_guidance} "
                             f"Trip style: {payload.trip_style}. Route: {selected_option['destination_order']}. "
                             f"Day allocation: {selected_option['days_by_stop']}."
@@ -856,6 +889,7 @@ class TripPlanner:
                 ]
             },
             "itinerary",
+            max_steps=max_steps,
         )
         structured = _structured_response_from_result(result, DeepItineraryPayload)
         mock_result = self._generate_mock_itinerary(payload, selected_option)

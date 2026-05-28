@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"])
     enable_real_agent: bool = True
+    # Temporary safeguard: Tavily usage is running hot, so keep the MVP in a low-search mode
+    # until we intentionally raise the cap again.
+    fast_mvp_mode: bool = True
+    fast_mvp_search_limit: int = 3
     llm_model: str | None = HARDCODED_LLM_MODEL
     openai_api_key: str | None = HARDCODED_OPENAI_API_KEY
     openai_base_url: str | None = HARDCODED_OPENAI_BASE_URL
