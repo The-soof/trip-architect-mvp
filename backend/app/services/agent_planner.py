@@ -438,16 +438,21 @@ def _log_agent_state(flow: str, step_index: int, state: dict[str, Any]) -> None:
     )
 
 
-def _run_deepagent_with_observability(agent: Any, payload: dict[str, Any], flow: str) -> dict[str, Any]:
+def _run_deepagent_with_observability(agent: Any, payload: dict[str, Any], flow: str, max_steps: int = 24) -> dict[str, Any]:
     _log_agent_event(
         flow,
         "started",
         note="Using default Deep Agents harness tools plus Trip Architect custom tools.",
     )
     final_state: dict[str, Any] | None = None
-    for step_index, state in enumerate(agent.stream(payload, stream_mode="values"), start=1):
+    for step_index, state in enumerate(
+        agent.stream(payload, stream_mode="values", config={"recursion_limit": max_steps + 4}),
+        start=1,
+    ):
         final_state = state
         _log_agent_state(flow, step_index, state)
+        if step_index >= max_steps and state.get("structured_response") is None:
+            raise TimeoutError(f"Deepagents exceeded the {max_steps}-step execution budget for {flow}.")
     if final_state is None:
         raise ValueError("Deepagents returned no state updates.")
     _log_agent_event(flow, "completed", total_messages=len(final_state.get("messages", [])))
@@ -734,6 +739,11 @@ class TripPlanner:
 
         tavily_search_tool = _build_tavily_tool(self.settings)
         chat_model = _build_chat_model(self.settings)
+        direct_search_guidance = (
+            "This is a narrow request; do not delegate to the built-in task tool. Use internet_search directly and finish quickly."
+            if len(payload.destination_candidates) <= 2
+            else "Use the built-in task tool only for genuinely independent research branches; otherwise use internet_search directly."
+        )
 
         agent = create_deep_agent(
             model=chat_model,
@@ -745,7 +755,9 @@ class TripPlanner:
                 "and any timing or budget signals that materially affect the recommendation. Work freely with your tools, but finish "
                 "with only the structured response requested by the schema. Make 3 to 5 distinct options unless the user's candidates "
                 "make fewer options more honest. Every option must be feasible for the dates, traveler count, budget, origin, and pace. "
-                "Use real source URLs when Tavily provides them, and keep estimates transparent rather than overconfident."
+                "Use real source URLs when Tavily provides them, and keep estimates transparent rather than overconfident. "
+                "Keep the run compact: prefer 3-6 targeted searches, avoid broad research loops, and complete the final JSON promptly. "
+                f"{direct_search_guidance}"
             ),
             response_format=DeepTripOptionsPayload,
         )
@@ -762,6 +774,8 @@ class TripPlanner:
                             "pace_label, estimated_total_min, estimated_total_max, budget_confidence, and fit_score. "
                             "Each days_by_stop item must be an object with city, nights, start_day, and end_day. "
                             "Each source must include title, url, category, and evidence_type. "
+                            "Keep this run compact and do not exceed six tool calls unless absolutely necessary. "
+                            f"{direct_search_guidance} "
                             f"Origin: {payload.origin}. Dates: {payload.start_date} to {payload.end_date}. "
                             f"Candidates: {', '.join(payload.destination_candidates)}. "
                             f"Trip style: {payload.trip_style}. Budget: {payload.budget_range or 'not specified'}. "
@@ -800,6 +814,11 @@ class TripPlanner:
 
         tavily_search_tool = _build_tavily_tool(self.settings)
         chat_model = _build_chat_model(self.settings)
+        direct_search_guidance = (
+            "Do not delegate to the built-in task tool for this itinerary. Use internet_search directly and finish quickly."
+            if len(selected_option.get("destination_order", [])) <= 2
+            else "Use the built-in task tool only for independent multi-stop research branches; otherwise use internet_search directly."
+        )
 
         agent = create_deep_agent(
             model=chat_model,
@@ -810,7 +829,9 @@ class TripPlanner:
                 "travelable day-by-day plan. Use Tavily to research current neighborhoods, restaurants or activity clusters, opening/logistics "
                 "signals, transfer friction, and practical booking context. Work freely with your tools, then finish with only the structured "
                 "response requested by the schema. Keep each day specific, realistic, and paced for humans. Preserve slack around arrivals, "
-                "do not invent fake hotel names as sources, and cite real source URLs when Tavily provides them."
+                "do not invent fake hotel names as sources, and cite real source URLs when Tavily provides them. "
+                "Keep the run compact: prefer 3-6 targeted searches, avoid broad research loops, and complete the final JSON promptly. "
+                f"{direct_search_guidance}"
             ),
             response_format=DeepItineraryPayload,
         )
@@ -826,6 +847,8 @@ class TripPlanner:
                             "Each day must include day_number, city, theme, morning, afternoon, evening, logistics_note, and flexibility_note. "
                             "Each neighborhood guidance item must include city, recommended_area, and why. "
                             "Each source must include title, url, category, and evidence_type. "
+                            "Keep this run compact and do not exceed six tool calls unless absolutely necessary. "
+                            f"{direct_search_guidance} "
                             f"Trip style: {payload.trip_style}. Route: {selected_option['destination_order']}. "
                             f"Day allocation: {selected_option['days_by_stop']}."
                         ),
