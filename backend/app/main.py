@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.db.bootstrap import ensure_runtime_schema
 from app.db.session import engine
+from app.services.trip_jobs import recover_interrupted_trip_jobs
 
 settings = get_settings()
 
@@ -22,6 +23,7 @@ settings = get_settings()
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     Base.metadata.create_all(bind=engine)
     ensure_runtime_schema(engine)
+    recover_interrupted_trip_jobs()
     yield
 
 

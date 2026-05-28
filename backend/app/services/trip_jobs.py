@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
@@ -82,6 +84,45 @@ def schedule_trip_options_generation(trip_id: str) -> None:
 
 def schedule_itinerary_generation(trip_id: str, option_id: str) -> None:
     submit_background_job(_run_itinerary_generation, trip_id, option_id)
+
+
+def recover_interrupted_trip_jobs() -> None:
+    db = SessionLocal()
+    try:
+        trips = db.scalars(
+            _trip_query().where(TripRequest.status.in_(["planning", "itinerary_planning", "selected"]))
+        ).unique().all()
+        recovered = 0
+        for trip in trips:
+            options_run = _latest_agent_run(trip, "options")
+            if trip.status == "planning" and options_run is not None and options_run.status == "running" and not trip.options:
+                submit_background_job(_run_trip_options_generation, trip.id)
+                recovered += 1
+                continue
+
+            itinerary_run = _latest_agent_run(trip, "itinerary")
+            if (
+                trip.selected_option_id
+                and itinerary_run is not None
+                and itinerary_run.status == "running"
+                and not any(option.itinerary is not None for option in trip.options if option.id == trip.selected_option_id)
+            ):
+                submit_background_job(_run_itinerary_generation, trip.id, trip.selected_option_id)
+                recovered += 1
+
+        if recovered:
+            print(
+                "trip_architect.jobs "
+                + json.dumps(
+                    {
+                        "message": "recovered_interrupted_jobs",
+                        "count": recovered,
+                    }
+                ),
+                flush=True,
+            )
+    finally:
+        db.close()
 
 
 def _run_trip_options_generation(trip_id: str) -> None:
