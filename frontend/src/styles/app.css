@@ -727,6 +727,13 @@ textarea {
   margin-bottom: 0;
 }
 
+.planner-wait-card {
+  min-height: 52vh;
+  display: grid;
+  align-content: center;
+  gap: 18px;
+}
+
 .planner-error {
   border-color: rgba(166, 58, 47, 0.2);
   background: linear-gradient(135deg, rgba(166, 58, 47, 0.08), rgba(255, 255, 255, 0.7));
@@ -758,6 +765,34 @@ textarea {
 .options-grid {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   margin: 24px 0;
+}
+
+.trip-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px;
+  margin: 24px 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.trip-tab {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.trip-tab.active {
+  background: var(--ink);
+  color: white;
+  box-shadow: 0 12px 24px rgba(17, 24, 39, 0.16);
 }
 
 .option-card {
@@ -1076,6 +1111,16 @@ textarea {
 
   .page-actions > * {
     width: 100%;
+  }
+
+  .trip-tab-bar {
+    width: 100%;
+    border-radius: 28px;
+  }
+
+  .trip-tab {
+    flex: 1 1 140px;
+    text-align: center;
   }
 
   .user-card {

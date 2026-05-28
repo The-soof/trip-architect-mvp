@@ -8,6 +8,8 @@ import Timeline from '../components/Timeline'
 import { useSession } from '../hooks/useSession.jsx'
 import { tripWindow } from '../lib/format'
 
+const TRIP_TABS = ['Options', 'Itinerary', 'Stays', 'Travel']
+
 export default function TripDetailPage() {
   const { tripId } = useParams()
   const { token } = useSession()
@@ -17,6 +19,7 @@ export default function TripDetailPage() {
   const [selectingOptionId, setSelectingOptionId] = useState('')
   const [bookingSavingKey, setBookingSavingKey] = useState('')
   const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState('Options')
 
   async function loadTrip({ silent = false } = {}) {
     try {
@@ -59,6 +62,8 @@ export default function TripDetailPage() {
   const isPlanningOptions = trip?.status === 'planning'
   const isBuildingItinerary = trip?.status === 'building_itinerary'
   const isPending = isPlanningOptions || isBuildingItinerary
+  const showPlanningScreen = isPlanningOptions && !trip?.options.length
+  const requiresSelectedOption = activeTab !== 'Options'
 
   useEffect(() => {
     if (!isPending) {
@@ -143,6 +148,44 @@ export default function TripDetailPage() {
     )
   }
 
+  if (showPlanningScreen) {
+    return (
+      <AppShell
+        title={trip.destination_candidates.join(' · ')}
+        subtitle={`${trip.origin} · ${tripWindow(trip.start_date, trip.end_date)} · ${trip.status}`}
+        actions={
+          <button className="primary-button" disabled={saving} onClick={handleSave} type="button">
+            {trip.saved_trip ? 'Saved to dashboard' : saving ? 'Saving...' : 'Save trip'}
+          </button>
+        }
+      >
+        {error ? <p className="inline-error">{error}</p> : null}
+        <section className="surface-card planner-wait-card" aria-live="polite">
+          <p className="eyebrow">Planning run in progress</p>
+          <h2>Please wait, suggestions are being generated.</h2>
+          <p>
+            Trip Architect is comparing routes, rough budgets, and tradeoffs now. This page refreshes automatically
+            while the options run finishes.
+          </p>
+          <div className="status-step-list">
+            <div className="status-step">
+              <strong>1. Intake agent</strong>
+              <span>Normalizing dates, origin, traveler count, and trip intent.</span>
+            </div>
+            <div className="status-step">
+              <strong>2. Routing + research agents</strong>
+              <span>Evaluating feasible stop combinations and destination fit.</span>
+            </div>
+            <div className="status-step">
+              <strong>3. Budget + planner agents</strong>
+              <span>Ranking the strongest trip options for this brief.</span>
+            </div>
+          </div>
+        </section>
+      </AppShell>
+    )
+  }
+
   return (
     <AppShell
       title={trip.destination_candidates.join(' · ')}
@@ -184,50 +227,20 @@ export default function TripDetailPage() {
         </div>
       </section>
 
-      {isPlanningOptions ? (
-        <section className="surface-card planner-status-card" aria-live="polite">
-          <p className="eyebrow">Planning run in progress</p>
-          <h2>Generating route options for this trip brief.</h2>
-          <p>
-            The workspace is live already. Trip Architect is now comparing destination combinations, tradeoffs, and
-            budget ranges in the background.
-          </p>
-          <div className="status-step-list">
-            <div className="status-step">
-              <strong>1. Intake agent</strong>
-              <span>Normalizing dates, origin, traveler count, and trip intent.</span>
-            </div>
-            <div className="status-step">
-              <strong>2. Routing + research agents</strong>
-              <span>Evaluating feasible stop combinations and destination fit.</span>
-            </div>
-            <div className="status-step">
-              <strong>3. Budget + planner agents</strong>
-              <span>Estimating spend bands and ranking the strongest options.</span>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="options-grid">
-        {trip.options.map((option) => (
-          <OptionCard
-            active={selectedOption?.id === option.id}
-            key={option.id}
-            onSelect={handleSelect}
-            option={option}
-            selecting={selectingOptionId === option.id}
-          />
+      <div className="trip-tab-bar" role="tablist" aria-label="Trip workspace sections">
+        {TRIP_TABS.map((tab) => (
+          <button
+            aria-selected={activeTab === tab}
+            className={`trip-tab ${activeTab === tab ? 'active' : ''}`}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            role="tab"
+            type="button"
+          >
+            {tab}
+          </button>
         ))}
-      </section>
-
-      {!trip.options.length && !isPlanningOptions && trip.status !== 'failed' ? (
-        <section className="surface-card planner-notice">
-          <p className="eyebrow">Trip options</p>
-          <h2>Route options will appear here as soon as planning finishes.</h2>
-          <p>This workspace refreshes automatically while the planning job is still running.</p>
-        </section>
-      ) : null}
+      </div>
 
       {isBuildingItinerary || selectingOptionId ? (
         <section className="surface-card planner-status-card" aria-live="polite">
@@ -254,24 +267,76 @@ export default function TripDetailPage() {
         </section>
       ) : null}
 
-      {itinerary ? <Timeline itinerary={itinerary} /> : null}
-
-      {selectedOption && !itinerary && !isBuildingItinerary && trip.status !== 'failed' ? (
+      {requiresSelectedOption && !selectedOption ? (
         <section className="surface-card planner-notice">
-          <p className="eyebrow">Itinerary detail</p>
-          <h2>The selected route is saved. A detailed itinerary will appear here after expansion runs.</h2>
-          <p>Choose the route you want to deepen and Trip Architect will build the daily plan and booking discovery.</p>
+          <p className="eyebrow">{activeTab}</p>
+          <h2>Please select a trip option before continuing.</h2>
+          <p>Open the Options tab, pick the route you want, and then Trip Architect will unlock the detailed plan.</p>
         </section>
       ) : null}
 
-      {trip.flight_options.length || trip.hotel_options.length ? (
-        <InventoryPanel
-          bookingSavingKey={bookingSavingKey}
-          confirmedBookings={trip.confirmed_bookings}
-          flights={trip.flight_options}
-          hotels={trip.hotel_options}
-          onUpdateBookingSelection={handleBookingSelection}
-        />
+      {activeTab === 'Options' ? (
+        <>
+          <section className="options-grid" role="tabpanel" aria-label="Trip options">
+            {trip.options.map((option) => (
+              <OptionCard
+                active={selectedOption?.id === option.id}
+                key={option.id}
+                onSelect={handleSelect}
+                option={option}
+                selecting={selectingOptionId === option.id}
+              />
+            ))}
+          </section>
+
+          {!trip.options.length && !isPlanningOptions && trip.status !== 'failed' ? (
+            <section className="surface-card planner-notice">
+              <p className="eyebrow">Trip options</p>
+              <h2>Route options will appear here as soon as planning finishes.</h2>
+              <p>This workspace refreshes automatically while the planning job is still running.</p>
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      {activeTab === 'Itinerary' && selectedOption ? (
+        <section role="tabpanel" aria-label="Trip itinerary">
+          {itinerary ? <Timeline itinerary={itinerary} /> : null}
+
+          {!itinerary && !isBuildingItinerary && trip.status !== 'failed' ? (
+            <section className="surface-card planner-notice">
+              <p className="eyebrow">Itinerary detail</p>
+              <h2>The selected route is saved. A detailed itinerary will appear here after expansion runs.</h2>
+              <p>Choose the route you want to deepen and Trip Architect will build the daily plan and booking discovery.</p>
+            </section>
+          ) : null}
+        </section>
+      ) : null}
+
+      {activeTab === 'Stays' && selectedOption ? (
+        <section role="tabpanel" aria-label="Trip stays">
+          <InventoryPanel
+            bookingSavingKey={bookingSavingKey}
+            confirmedBookings={trip.confirmed_bookings}
+            flights={trip.flight_options}
+            hotels={trip.hotel_options}
+            mode="hotels"
+            onUpdateBookingSelection={handleBookingSelection}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === 'Travel' && selectedOption ? (
+        <section role="tabpanel" aria-label="Trip travel">
+          <InventoryPanel
+            bookingSavingKey={bookingSavingKey}
+            confirmedBookings={trip.confirmed_bookings}
+            flights={trip.flight_options}
+            hotels={trip.hotel_options}
+            mode="flights"
+            onUpdateBookingSelection={handleBookingSelection}
+          />
+        </section>
       ) : null}
 
       <section className="surface-card">

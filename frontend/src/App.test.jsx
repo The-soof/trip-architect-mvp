@@ -127,6 +127,105 @@ test('trip detail shows background planning state while options are still genera
     </MemoryRouter>,
   )
 
-  expect(await screen.findByText(/Generating route options for this trip brief/i)).toBeInTheDocument()
-  expect(screen.getByText(/The workspace is live already/i)).toBeInTheDocument()
+  expect(await screen.findByText(/Please wait, suggestions are being generated/i)).toBeInTheDocument()
+  expect(screen.getByText(/This page refreshes automatically while the options run finishes/i)).toBeInTheDocument()
+})
+
+test('trip detail blocks itinerary tabs until a route option is selected', async () => {
+  window.localStorage.setItem(
+    'trip-architect-session',
+    JSON.stringify({
+      token: 'test-token',
+      user: { id: 'user-1', email: 'alex@example.com', full_name: 'Alex Rivera' },
+    }),
+  )
+
+  const user = (await import('@testing-library/user-event')).default.setup()
+
+  const trip = {
+    id: 'trip-2',
+    origin: 'New York',
+    start_date: '2026-08-10',
+    end_date: '2026-08-20',
+    destination_candidates: ['Barcelona', 'Split'],
+    trip_style: 'Fun summer trip with food and water.',
+    budget_range: 'Mid-range',
+    traveler_count: 2,
+    pace_preference: 'Balanced',
+    planning_mode: 'deepagents',
+    status: 'selected',
+    selected_option_id: null,
+    created_at: '2026-05-28T07:00:00Z',
+    updated_at: '2026-05-28T07:00:00Z',
+    options: [
+      {
+        id: 'opt-1',
+        name: 'Barcelona first',
+        summary: 'Good weather and beach balance.',
+        rationale: 'Front-loads the city days and leaves beach recovery for later.',
+        fit_score: 8.8,
+        days_by_stop: [
+          { city: 'Barcelona', nights: 5 },
+          { city: 'Split', nights: 4 },
+        ],
+        estimated_total_min: 3200,
+        estimated_total_max: 4100,
+        pace_label: 'Balanced',
+        cost_breakdown: {
+          flights: { min: 1200, max: 1500 },
+          lodging: { min: 1300, max: 1800 },
+          local_transport: { min: 200, max: 280 },
+          food_and_activities: { min: 500, max: 700 },
+        },
+        tradeoffs: ['Adds a mid-trip transfer day.'],
+        warning_flags: [],
+        price_assumptions: ['Assumes shoulder-season airfare from JFK.'],
+      },
+    ],
+    itineraries: [],
+    flight_options: [],
+    hotel_options: [],
+    confirmed_bookings: [],
+    agent_runs: [],
+    saved_trip: null,
+  }
+
+  vi.spyOn(global, 'fetch').mockImplementation((input) => {
+    const url = String(input)
+    let payload = null
+    if (url.endsWith('/api/trips/trip-2')) {
+      payload = trip
+    } else if (url.endsWith('/api/trips')) {
+      payload = { recent_trips: [], saved_trips: [] }
+    } else if (url.endsWith('/api/profile/me')) {
+      payload = {
+        id: 'profile-1',
+        home_airport: 'JFK',
+        budget_preference: 'Mid-range',
+        pace_preference: 'Balanced',
+        interests: ['Food'],
+      }
+    } else {
+      return Promise.reject(new Error(`Unexpected request: ${url}`))
+    }
+
+    return Promise.resolve(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  render(
+    <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }} initialEntries={['/trips/trip-2']}>
+      <App />
+    </MemoryRouter>,
+  )
+
+  await screen.findByRole('tab', { name: /Itinerary/i })
+  await user.click(screen.getByRole('tab', { name: /Itinerary/i }))
+
+  expect(screen.getByText(/Please select a trip option before continuing/i)).toBeInTheDocument()
+  expect(screen.getByText(/Open the Options tab, pick the route you want/i)).toBeInTheDocument()
 })
