@@ -5,7 +5,7 @@ Trip Architect is a full-stack travel planning MVP built from the `plan.md` spec
 - Python `FastAPI` backend
 - React + Vite frontend
 - SQLite for local development, PostgreSQL-ready for Railway
-- Deterministic mock planner by default, with optional LangChain `deepagents` + Gemini + Tavily integration when API keys are present
+- Deterministic fallback planner plus LangChain `deepagents`, Tavily research, and an OpenAI-compatible DeepSeek endpoint for live agent runs
 
 ## Local development
 
@@ -34,6 +34,13 @@ Backend:
 ```bash
 cd backend
 pytest
+```
+
+Agent evals are included in the backend pytest suite. To run just the planner/itinerary quality evals:
+
+```bash
+cd backend
+pytest tests/test_agent_evals.py
 ```
 
 Frontend:
