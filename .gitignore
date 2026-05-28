@@ -4,6 +4,10 @@
 .env.production
 backend/.env
 backend/.env.local
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 .coverage
@@ -14,6 +18,7 @@ dist/
 build/
 backend/.venv/
 backend/trip_architect.db
+backend/test_trip_architect.db
 backend/.pytest_cache/
 frontend/node_modules/
 frontend/dist/
