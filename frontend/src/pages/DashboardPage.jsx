@@ -42,7 +42,7 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
     () => dashboard.recent_trips.some((trip) => ['planning', 'building_itinerary'].includes(trip.status)),
     [dashboard.recent_trips],
   )
-  const planningHealth = profile?.home_airport ? 'Ready to plan' : 'Add profile defaults'
+  const planningHealth = profile?.home_airport ? 'Ready' : 'Incomplete'
   const showWorkspaceLoading = loadingWorkspace && !dashboard.recent_trips.length && !dashboard.saved_trips.length && !profile
 
   const intakeDefaults = useMemo(
@@ -112,29 +112,39 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
 
   return (
     <AppShell
-      title="Plan a trip with structure, tradeoffs, and a clear next step."
-      subtitle="Build a fresh route shortlist, reuse a saved trip as your starting point, and keep every planning decision in one organized workspace."
+      title="Plan the trip. Keep the details together."
+      subtitle="Build a route shortlist, reuse saved trips, and keep the next step clear."
     >
+      <section className="workspace-overview" aria-label="Workspace summary">
+        <article className="surface-card stat-card">
+          <p className="eyebrow">Profile</p>
+          <strong>{planningHealth}</strong>
+          <span>{profile?.home_airport ? `Home airport: ${profile.home_airport}` : 'Add a home airport.'}</span>
+        </article>
+        <article className="surface-card stat-card">
+          <p className="eyebrow">Saved trips</p>
+          <strong>{dashboard.saved_trips.length}</strong>
+          <span>{upcomingTrips.length} upcoming</span>
+        </article>
+        <article className="surface-card stat-card">
+          <p className="eyebrow">Recent runs</p>
+          <strong>{dashboard.recent_trips.length}</strong>
+          <span>{hasPendingTrips ? 'Planner active' : 'No active jobs'}</span>
+        </article>
+        <article className="surface-card stat-card stat-card-action">
+          <div>
+            <p className="eyebrow">Defaults</p>
+            <strong>{profile?.home_airport || 'Unset'}</strong>
+            <span>{profile?.budget_preference || 'Mid-range'} · {profile?.pace_preference || 'Balanced'}</span>
+          </div>
+          <Link className="secondary-button stat-card-link" to="/profile">
+            Open profile
+          </Link>
+        </article>
+      </section>
+
       <div className="dashboard-grid">
         <div className="dashboard-main">
-          <section className="stats-grid" aria-label="Workspace summary">
-            <article className="surface-card stat-card">
-              <p className="eyebrow">Profile readiness</p>
-              <strong>{planningHealth}</strong>
-              <span>{profile?.home_airport ? `Home airport: ${profile.home_airport}` : 'Add defaults to speed up new trip briefs.'}</span>
-            </article>
-            <article className="surface-card stat-card">
-              <p className="eyebrow">Saved trips</p>
-              <strong>{dashboard.saved_trips.length}</strong>
-              <span>{upcomingTrips.length} upcoming itineraries ready to reopen.</span>
-            </article>
-            <article className="surface-card stat-card">
-              <p className="eyebrow">Recent planning runs</p>
-              <strong>{dashboard.recent_trips.length}</strong>
-              <span>{prefillTrip ? 'Using a saved trip as your current starting point.' : 'Every request stays available for follow-up.'}</span>
-            </article>
-          </section>
-
           {showWorkspaceLoading ? (
             <section className="surface-card planner-notice" aria-live="polite">
               <p className="eyebrow">Syncing workspace</p>
@@ -178,19 +188,6 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
         </div>
 
         <aside className="dashboard-sidebar">
-          <section className="surface-card">
-            <div className="section-header">
-              <div>
-                <p className="eyebrow">Traveler defaults</p>
-                <h2>{profile?.home_airport || 'Add profile'}</h2>
-              </div>
-              <p>Save planning preferences once, then reuse them across every new itinerary.</p>
-            </div>
-            <Link className="secondary-button inline-link-button" to="/profile">
-              Open profile
-            </Link>
-          </section>
-
           <section className="surface-card">
             <div className="section-header">
               <div>

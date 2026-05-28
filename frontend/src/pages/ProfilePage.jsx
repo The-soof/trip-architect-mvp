@@ -61,8 +61,8 @@ export default function ProfilePage({ loadingWorkspace, profile, reloadProfile }
 
   return (
     <AppShell
-      title="Traveler profile and planning preferences"
-      subtitle="Set defaults once so new trips inherit your pacing, budget, and interest signals."
+      title="Set your travel defaults."
+      subtitle="Save airport, budget, pace, and interest signals once so new trips start cleaner."
     >
       {loadingWorkspace ? (
         <section className="surface-card planner-notice" aria-live="polite">

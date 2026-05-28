@@ -33,7 +33,7 @@ export default function AppShell({ title, subtitle, actions, children }) {
             <strong>{user?.full_name || 'Traveler'}</strong>
             {user?.email ? <span>{user.email}</span> : null}
           </div>
-          <button className="ghost-button" onClick={clearSession} type="button">
+          <button className="ghost-button topbar-logout" onClick={clearSession} type="button">
             Sign out
           </button>
         </div>
@@ -41,12 +41,12 @@ export default function AppShell({ title, subtitle, actions, children }) {
 
       <main id="main-content">
         <section className={`page-intro surface-card${actions ? ' has-actions' : ''}`}>
-        <div>
-          <p className="eyebrow">Trip workspace</p>
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
-        </div>
-        {actions ? <div className="page-actions">{actions}</div> : null}
+          <div className="page-intro-copy">
+            <p className="eyebrow">Trip workspace</p>
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
+          {actions ? <div className="page-actions">{actions}</div> : null}
         </section>
 
         {children}
