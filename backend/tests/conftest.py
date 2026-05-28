@@ -10,7 +10,8 @@ os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_trip_architect.db"
 os.environ["JWT_SECRET_KEY"] = "test-secret"
 os.environ["ENABLE_REAL_AGENT"] = "false"
-os.environ["GOOGLE_API_KEY"] = ""
+os.environ["OPENAI_API_KEY"] = ""
+os.environ["OPENAI_BASE_URL"] = ""
 os.environ["TAVILY_API_KEY"] = ""
 
 from app.db.base import Base  # noqa: E402

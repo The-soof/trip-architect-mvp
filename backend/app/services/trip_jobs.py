@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
-
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import joinedload
 
 from app.core.config import get_settings
 from app.db.session import SessionLocal

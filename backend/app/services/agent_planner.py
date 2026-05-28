@@ -4,14 +4,15 @@ from dataclasses import dataclass
 from datetime import timedelta
 from itertools import combinations
 import json
-import os
-from typing import Any
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings
 from app.schemas.trip import TripCreateRequest
 from app.services.booking import build_booking_link, build_google_flights_link
+
+StructuredPayloadT = TypeVar("StructuredPayloadT", bound=BaseModel)
 
 CITY_TRAITS: dict[str, dict[str, Any]] = {
     "barcelona": {
@@ -66,10 +67,10 @@ ACTIVITY_BLOCKS = {
 
 
 class ResearchSource(BaseModel):
-    title: str
-    url: str
-    category: str
-    evidence_type: str = Field(description="One of researched_fact, inferred_recommendation, estimated_price")
+    title: str = "Agent research note"
+    url: str = "app://agent-research"
+    category: str = "agent_research"
+    evidence_type: str = Field(default="researched_fact", description="One of researched_fact, inferred_recommendation, estimated_price")
 
 
 class DeepOptionPayload(BaseModel):
@@ -323,21 +324,134 @@ def _planning_sources(destinations: list[str], mode: str) -> list[dict[str, str]
     return sources
 
 
-def _configure_model_provider_env(settings: Settings) -> None:
-    if settings.google_api_key:
-        os.environ["GOOGLE_API_KEY"] = settings.google_api_key
-    if settings.tavily_api_key:
-        os.environ["TAVILY_API_KEY"] = settings.tavily_api_key
+def _build_chat_model(settings: Settings):
+    from langchain_openai import ChatOpenAI
 
-
-def _build_tavily_tool():
-    from langchain_tavily import TavilySearch
-
-    return TavilySearch(
-        max_results=5,
-        include_answer=True,
-        include_raw_content=True,
+    return ChatOpenAI(
+        model=settings.llm_model,
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url,
+        temperature=0,
+        max_tokens=2200,
+        timeout=90,
     )
+
+
+def _build_tavily_tool(settings: Settings):
+    from langchain.tools import tool
+    from tavily import TavilyClient
+
+    tavily_client = TavilyClient(api_key=settings.tavily_api_key)
+
+    @tool("internet_search")
+    def internet_search(
+        query: str,
+        max_results: int = 5,
+        topic: Literal["general", "news", "finance"] = "general",
+        include_raw_content: bool = False,
+    ) -> dict[str, Any]:
+        """Run a Tavily web search for current travel facts, logistics, prices, and destination research."""
+        _log_agent_event(
+            "tool",
+            "internet_search_started",
+            query=query,
+            max_results=max_results,
+            topic=topic,
+            include_raw_content=include_raw_content,
+        )
+        result = tavily_client.search(
+            query=query,
+            max_results=max_results,
+            topic=topic,
+            include_raw_content=include_raw_content,
+        )
+        _log_agent_event(
+            "tool",
+            "internet_search_completed",
+            query=query,
+            results_count=len(result.get("results", [])),
+        )
+        return result
+
+    return internet_search
+
+
+def _structured_response_from_result(result: dict[str, Any], schema: type[StructuredPayloadT]) -> StructuredPayloadT:
+    structured_response = result.get("structured_response")
+    if structured_response is not None:
+        return schema.model_validate(structured_response)
+    return schema.model_validate(_extract_json_payload(_message_text_from_result(result)))
+
+
+def _log_agent_event(flow: str, message: str, **metadata: Any) -> None:
+    payload = {"flow": flow, "message": message, **metadata}
+    print(f"trip_architect.deepagent {json.dumps(payload, default=str)}", flush=True)
+
+
+def _summarize_text(value: Any, limit: int = 260) -> str:
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, list):
+        text = " ".join(str(item.get("text", item)) if isinstance(item, dict) else str(item) for item in value)
+    else:
+        text = str(value)
+    text = " ".join(text.split())
+    return text[:limit]
+
+
+def _log_agent_state(flow: str, step_index: int, state: dict[str, Any]) -> None:
+    if state.get("structured_response") is not None:
+        _log_agent_event(flow, "structured_response_ready", step_index=step_index)
+
+    messages = state.get("messages", [])
+    if not messages:
+        _log_agent_event(flow, "state_update", step_index=step_index, keys=sorted(state.keys()))
+        return
+
+    latest_message = messages[-1]
+    tool_calls = getattr(latest_message, "tool_calls", None) or []
+    if tool_calls:
+        _log_agent_event(
+            flow,
+            "tool_calls_requested",
+            step_index=step_index,
+            tools=[
+                {
+                    "name": call.get("name"),
+                    "args": call.get("args"),
+                }
+                for call in tool_calls
+            ],
+        )
+        return
+
+    message_type = latest_message.__class__.__name__
+    tool_name = getattr(latest_message, "name", None)
+    content = getattr(latest_message, "content", "")
+    _log_agent_event(
+        flow,
+        "message_update",
+        step_index=step_index,
+        message_type=message_type,
+        tool_name=tool_name,
+        content_preview=_summarize_text(content),
+    )
+
+
+def _run_deepagent_with_observability(agent: Any, payload: dict[str, Any], flow: str) -> dict[str, Any]:
+    _log_agent_event(
+        flow,
+        "started",
+        note="Using default Deep Agents harness tools plus Trip Architect custom tools.",
+    )
+    final_state: dict[str, Any] | None = None
+    for step_index, state in enumerate(agent.stream(payload, stream_mode="values"), start=1):
+        final_state = state
+        _log_agent_state(flow, step_index, state)
+    if final_state is None:
+        raise ValueError("Deepagents returned no state updates.")
+    _log_agent_event(flow, "completed", total_messages=len(final_state.get("messages", [])))
+    return final_state
 
 
 def _message_text_from_result(result: dict[str, Any]) -> str:
@@ -377,9 +491,9 @@ def _fallback_reason_from_exception(exc: Exception) -> str:
     message = str(exc).strip() or exc.__class__.__name__
     lowered = message.lower()
     if "resource_exhausted" in lowered or "429" in lowered or "quota" in lowered or "credit" in lowered:
-        return "Gemini capacity is currently unavailable, so Trip Architect switched to the structured fallback planner."
+        return "The live DeepSeek-compatible endpoint is currently unavailable, so Trip Architect switched to the structured fallback planner."
     if "api key" in lowered or "permission" in lowered or "auth" in lowered:
-        return "The live AI provider credentials were rejected, so Trip Architect switched to the structured fallback planner."
+        return "The live DeepSeek-compatible endpoint rejected the credentials, so Trip Architect switched to the structured fallback planner."
     return f"Live agent planning was unavailable ({message[:160]}), so Trip Architect switched to the structured fallback planner."
 
 
@@ -388,7 +502,12 @@ class TripPlanner:
         self.settings = settings
 
     def generate_trip_options(self, payload: TripCreateRequest) -> PlanningArtifacts:
-        if self.settings.enable_real_agent and self.settings.tavily_api_key and self.settings.google_api_key:
+        if (
+            self.settings.enable_real_agent
+            and self.settings.tavily_api_key
+            and self.settings.openai_api_key
+            and self.settings.openai_base_url
+        ):
             try:
                 return self._generate_with_deepagents(payload)
             except Exception as exc:
@@ -396,7 +515,12 @@ class TripPlanner:
         return self._generate_mock_options(payload)
 
     def generate_itinerary(self, payload: TripCreateRequest, selected_option: dict[str, Any]) -> ItineraryArtifacts:
-        if self.settings.enable_real_agent and self.settings.tavily_api_key and self.settings.google_api_key:
+        if (
+            self.settings.enable_real_agent
+            and self.settings.tavily_api_key
+            and self.settings.openai_api_key
+            and self.settings.openai_base_url
+        ):
             try:
                 return self._generate_deep_itinerary(payload, selected_option)
             except Exception as exc:
@@ -607,30 +731,26 @@ class TripPlanner:
 
     def _generate_with_deepagents(self, payload: TripCreateRequest) -> PlanningArtifacts:
         from deepagents import create_deep_agent
-        from langgraph.checkpoint.memory import MemorySaver
-        _configure_model_provider_env(self.settings)
-        tavily_search_tool = _build_tavily_tool()
 
-        research_subagent = {
-            "name": "research-agent",
-            "description": "Researches destination fit, seasonality, and activity signals for the requested trip.",
-            "system_prompt": "Research the requested destinations and return concise evidence for trip planning.",
-            "tools": [tavily_search_tool],
-        }
-        routing_subagent = {
-            "name": "routing-agent",
-            "description": "Recommends feasible destination combinations and sequencing.",
-            "system_prompt": "Optimize route feasibility, pacing, and variety without suggesting impossible routing.",
-            "tools": [tavily_search_tool],
-        }
+        tavily_search_tool = _build_tavily_tool(self.settings)
+        chat_model = _build_chat_model(self.settings)
+
         agent = create_deep_agent(
-            model=self.settings.llm_model,
+            model=chat_model,
             tools=[tavily_search_tool],
-            subagents=[research_subagent, routing_subagent],
-            checkpointer=MemorySaver(),
             name="trip-architect-planner",
+            system_prompt=(
+                "You are Trip Architect's trip-options agent. Build polished, realistic travel options from the exact form input. "
+                "Use Tavily to research the candidate destinations, seasonality, travel friction, neighborhoods, food/culture fit, "
+                "and any timing or budget signals that materially affect the recommendation. Work freely with your tools, but finish "
+                "with only the structured response requested by the schema. Make 3 to 5 distinct options unless the user's candidates "
+                "make fewer options more honest. Every option must be feasible for the dates, traveler count, budget, origin, and pace. "
+                "Use real source URLs when Tavily provides them, and keep estimates transparent rather than overconfident."
+            ),
+            response_format=DeepTripOptionsPayload,
         )
-        result = agent.invoke(
+        result = _run_deepagent_with_observability(
+            agent,
             {
                 "messages": [
                     {
@@ -650,9 +770,9 @@ class TripPlanner:
                     }
                 ]
             },
-            config={"configurable": {"thread_id": f"trip-options-{payload.origin}-{payload.start_date}"}},
+            "trip_options",
         )
-        structured = DeepTripOptionsPayload.model_validate(_extract_json_payload(_message_text_from_result(result)))
+        structured = _structured_response_from_result(result, DeepTripOptionsPayload)
         trip_days = _trip_length(payload)
         normalized_options = []
         for option in structured.options:
@@ -677,24 +797,25 @@ class TripPlanner:
 
     def _generate_deep_itinerary(self, payload: TripCreateRequest, selected_option: dict[str, Any]) -> ItineraryArtifacts:
         from deepagents import create_deep_agent
-        from langgraph.checkpoint.memory import MemorySaver
-        _configure_model_provider_env(self.settings)
-        tavily_search_tool = _build_tavily_tool()
 
-        itinerary_subagent = {
-            "name": "itinerary-agent",
-            "description": "Builds a day-by-day travel itinerary with logistics and neighborhood guidance.",
-            "system_prompt": "Return a realistic itinerary with daily structure and room for recovery time.",
-            "tools": [tavily_search_tool],
-        }
+        tavily_search_tool = _build_tavily_tool(self.settings)
+        chat_model = _build_chat_model(self.settings)
+
         agent = create_deep_agent(
-            model=self.settings.llm_model,
+            model=chat_model,
             tools=[tavily_search_tool],
-            subagents=[itinerary_subagent],
-            checkpointer=MemorySaver(),
             name="trip-architect-itinerary",
+            system_prompt=(
+                "You are Trip Architect's itinerary agent. Turn the selected trip option and original form input into a useful, "
+                "travelable day-by-day plan. Use Tavily to research current neighborhoods, restaurants or activity clusters, opening/logistics "
+                "signals, transfer friction, and practical booking context. Work freely with your tools, then finish with only the structured "
+                "response requested by the schema. Keep each day specific, realistic, and paced for humans. Preserve slack around arrivals, "
+                "do not invent fake hotel names as sources, and cite real source URLs when Tavily provides them."
+            ),
+            response_format=DeepItineraryPayload,
         )
-        result = agent.invoke(
+        result = _run_deepagent_with_observability(
+            agent,
             {
                 "messages": [
                     {
@@ -711,9 +832,9 @@ class TripPlanner:
                     }
                 ]
             },
-            config={"configurable": {"thread_id": f"trip-itinerary-{payload.origin}-{payload.start_date}"}},
+            "itinerary",
         )
-        structured = DeepItineraryPayload.model_validate(_extract_json_payload(_message_text_from_result(result)))
+        structured = _structured_response_from_result(result, DeepItineraryPayload)
         mock_result = self._generate_mock_itinerary(payload, selected_option)
         return ItineraryArtifacts(
             mode="deepagents",

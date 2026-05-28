@@ -260,24 +260,14 @@ def test_trip_planning_records_fallback_reason_when_live_agent_fails(client: Tes
     token = register_user(client)["access_token"]
 
     monkeypatch.setattr(
-        "app.api.trips.get_settings",
-        lambda: Settings(
-            app_env="test",
-            database_url="sqlite:///./test_trip_architect.db",
-            jwt_secret_key="test-secret",
-            enable_real_agent=True,
-            google_api_key="test-google",
-            tavily_api_key="test-tavily",
-        ),
-    )
-    monkeypatch.setattr(
         "app.services.trip_jobs.get_settings",
         lambda: Settings(
             app_env="test",
             database_url="sqlite:///./test_trip_architect.db",
             jwt_secret_key="test-secret",
             enable_real_agent=True,
-            google_api_key="test-google",
+            openai_api_key="test-openai",
+            openai_base_url="https://example.com/v1",
             tavily_api_key="test-tavily",
         ),
     )
@@ -297,7 +287,9 @@ def test_trip_planning_records_fallback_reason_when_live_agent_fails(client: Tes
         lambda payload: payload["status"] == "planned" and "fallback_reason" in payload["agent_runs"][0]["output_payload"],
     )
     assert trip["planning_mode"] == "mock"
-    assert trip["agent_runs"][0]["output_payload"]["fallback_reason"].startswith("Gemini capacity is currently unavailable")
+    assert trip["agent_runs"][0]["output_payload"]["fallback_reason"].startswith(
+        "The live DeepSeek-compatible endpoint is currently unavailable"
+    )
     assert trip["agent_runs"][0]["steps"][-1]["agent"] == "fallback-guard"
 
 

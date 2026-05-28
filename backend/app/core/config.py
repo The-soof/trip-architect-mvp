@@ -6,6 +6,11 @@ import json
 from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+HARDCODED_LLM_MODEL = "deepseek-v4-azure"
+HARDCODED_OPENAI_API_KEY = "sk-tJH9LJV6WJbo5yge7X7HFA"
+HARDCODED_OPENAI_BASE_URL = "https://muon-lite.up.railway.app/"
+HARDCODED_TAVILY_API_KEY = "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"
+
 
 class Settings(BaseSettings):
     app_name: str = "Trip Architect"
@@ -17,9 +22,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"])
     enable_real_agent: bool = True
-    llm_model: str | None = "google_genai:gemini-3.5-flash"
-    google_api_key: str | None = "AIzaSyDWeyMHHWzwz8yVnnw9-p4fIO5EYG3tNnY"
-    tavily_api_key: str | None = "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"
+    llm_model: str | None = HARDCODED_LLM_MODEL
+    openai_api_key: str | None = HARDCODED_OPENAI_API_KEY
+    openai_base_url: str | None = HARDCODED_OPENAI_BASE_URL
+    tavily_api_key: str | None = HARDCODED_TAVILY_API_KEY
     default_trip_strategy: Literal["balance", "cheapest", "experience"] = "balance"
 
     model_config = SettingsConfigDict(
@@ -45,6 +51,14 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    def model_post_init(self, __context: object) -> None:
+        if self.app_env == "test":
+            return
+        self.llm_model = HARDCODED_LLM_MODEL
+        self.openai_api_key = HARDCODED_OPENAI_API_KEY
+        self.openai_base_url = HARDCODED_OPENAI_BASE_URL
+        self.tavily_api_key = HARDCODED_TAVILY_API_KEY
 
 
 @lru_cache
