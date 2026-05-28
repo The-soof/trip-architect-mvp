@@ -23,7 +23,7 @@ from app.models import (
     User,
 )
 from app.schemas.trip import BookingSelectionRequest, DashboardResponse, SaveTripRequest, TripCreateRequest, TripRead
-from app.services.agent_planner import TripPlanner
+from app.services.trip_jobs import schedule_itinerary_generation, schedule_trip_options_generation
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -56,7 +56,7 @@ def _serialize_trip(trip: TripRequest) -> TripRead:
     return TripRead.model_validate(trip)
 
 
-def _materialize_trip_request(
+def _prepare_trip_request(
     db: Session,
     current_user: User,
     payload: TripCreateRequest,
@@ -83,59 +83,31 @@ def _materialize_trip_request(
     )
     db.add(trip)
     db.flush()
-
-    effective_payload = TripCreateRequest(
-        origin=trip.origin,
-        start_date=trip.start_date,
-        end_date=trip.end_date,
-        destination_candidates=trip.destination_candidates,
-        trip_style=trip.trip_style,
-        budget_range=trip.budget_range,
-        traveler_count=trip.traveler_count,
-        pace_preference=trip.pace_preference,
-    )
-    planner = TripPlanner(get_settings())
-    planning = planner.generate_trip_options(effective_payload)
-    trip.planning_mode = planning.mode
-    trip.status = "planned"
-
-    for option in planning.options:
-        db.add(
-            TripOption(
-                trip_request_id=trip.id,
-                name=option["name"],
-                summary=option["summary"],
-                rationale=option["rationale"],
-                tradeoffs=option["tradeoffs"],
-                destination_order=option["destination_order"],
-                days_by_stop=option["days_by_stop"],
-                pace_label=option["pace_label"],
-                estimated_total_min=option["estimated_total_min"],
-                estimated_total_max=option["estimated_total_max"],
-                budget_confidence=option["budget_confidence"],
-                fit_score=option["fit_score"],
-            )
-        )
-    db.add(
-        AgentRun(
-            trip_request_id=trip.id,
-            kind="options",
-            mode=planning.mode,
-            summary=planning.planning_summary,
-            input_payload={
-                **payload.model_dump(mode="json"),
-                "traveler_profile": {
-                    "home_airport": profile.home_airport if profile else None,
-                    "budget_preference": profile.budget_preference if profile else None,
-                    "pace_preference": profile.pace_preference if profile else None,
-                    "interests": profile.interests if profile else [],
-                },
+    agent_run = AgentRun(
+        trip_request_id=trip.id,
+        kind="options",
+        mode="pending",
+        status="running",
+        summary="Planning trip options in the background.",
+        input_payload={
+            **payload.model_dump(mode="json"),
+            "traveler_profile": {
+                "home_airport": profile.home_airport if profile else None,
+                "budget_preference": profile.budget_preference if profile else None,
+                "pace_preference": profile.pace_preference if profile else None,
+                "interests": profile.interests if profile else [],
             },
-            output_payload={"options_count": len(planning.options)},
-            steps=planning.steps,
-            sources=planning.sources,
-        )
+        },
+        output_payload={"options_count": 0},
+        steps=[
+            {"agent": "intake-agent", "status": "running", "detail": "Normalizing traveler constraints and timing window."},
+            {"agent": "routing-agent", "status": "pending", "detail": "Waiting to compare destination combinations and pacing tradeoffs."},
+            {"agent": "budget-agent", "status": "pending", "detail": "Waiting to estimate flight, lodging, and activity ranges."},
+            {"agent": "planner-agent", "status": "pending", "detail": "Waiting to rank the best-fit route options."},
+        ],
+        sources=[],
     )
+    db.add(agent_run)
     return trip
 
 
@@ -156,16 +128,17 @@ def list_trips(
     return DashboardResponse(recent_trips=[_serialize_trip(trip) for trip in trips], saved_trips=[_serialize_trip(trip) for trip in saved])
 
 
-@router.post("", response_model=TripRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TripRead, status_code=status.HTTP_202_ACCEPTED)
 def create_trip(
     payload: TripCreateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TripRead:
-    trip = _materialize_trip_request(db, current_user, payload, current_user.profile)
+    trip = _prepare_trip_request(db, current_user, payload, current_user.profile)
     db.commit()
-    trip = _get_trip_or_404(db, current_user.id, trip.id)
-    return _serialize_trip(trip)
+    response_trip = _get_trip_or_404(db, current_user.id, trip.id)
+    schedule_trip_options_generation(trip.id)
+    return _serialize_trip(response_trip)
 
 
 @router.get("/{trip_id}", response_model=TripRead)
@@ -192,75 +165,44 @@ def select_trip_option(
     for option in trip.options:
         option.is_selected = option.id == option_id
     trip.selected_option_id = option_id
-    trip.status = "selected"
 
     existing_itinerary = next((itinerary for itinerary in trip.itineraries if itinerary.trip_option_id == option_id), None)
+    running_itinerary_run = next(
+        (
+            run
+            for run in reversed(trip.agent_runs)
+            if run.kind == "itinerary"
+            and run.status == "running"
+            and run.input_payload.get("selected_option_id") == selected_option.id
+        ),
+        None,
+    )
     if not existing_itinerary:
-        effective_payload = TripCreateRequest(
-            origin=trip.origin,
-            start_date=trip.start_date,
-            end_date=trip.end_date,
-            destination_candidates=trip.destination_candidates,
-            trip_style=trip.trip_style,
-            budget_range=trip.budget_range,
-            traveler_count=trip.traveler_count,
-            pace_preference=trip.pace_preference,
-        )
-        planner = TripPlanner(get_settings())
-        itinerary_artifacts = planner.generate_itinerary(
-            effective_payload,
-            {
-                "name": selected_option.name,
-                "destination_order": selected_option.destination_order,
-                "days_by_stop": selected_option.days_by_stop,
-                "pace_label": selected_option.pace_label,
-                "estimated_total_min": selected_option.estimated_total_min,
-            },
-        )
-        itinerary = Itinerary(
-            trip_request_id=trip.id,
-            trip_option_id=selected_option.id,
-            title=itinerary_artifacts.itinerary["title"],
-            overview=itinerary_artifacts.itinerary["overview"],
-            logistics=itinerary_artifacts.itinerary["logistics"],
-            neighborhood_guidance=itinerary_artifacts.itinerary["neighborhood_guidance"],
-        )
-        db.add(itinerary)
-        db.flush()
-        for day in itinerary_artifacts.itinerary["days"]:
-            db.add(
-                ItineraryDay(
-                    itinerary_id=itinerary.id,
-                    day_number=day["day_number"],
-                    city=day["city"],
-                    theme=day["theme"],
-                    morning=day["morning"],
-                    afternoon=day["afternoon"],
-                    evening=day["evening"],
-                    logistics_note=day["logistics_note"],
-                    flexibility_note=day["flexibility_note"],
-                )
-            )
-        db.query(FlightOption).filter(FlightOption.trip_option_id == selected_option.id).delete()
-        db.query(HotelOption).filter(HotelOption.trip_option_id == selected_option.id).delete()
-        for flight in itinerary_artifacts.flights:
-            db.add(FlightOption(trip_request_id=trip.id, trip_option_id=selected_option.id, **flight))
-        for hotel in itinerary_artifacts.hotels:
-            db.add(HotelOption(trip_request_id=trip.id, trip_option_id=selected_option.id, **hotel))
-        db.add(
-            AgentRun(
+        trip.status = "building_itinerary"
+        if running_itinerary_run is None:
+            itinerary_run = AgentRun(
                 trip_request_id=trip.id,
                 kind="itinerary",
-                mode=itinerary_artifacts.mode,
-                summary=itinerary_artifacts.summary,
+                mode="pending",
+                status="running",
+                summary="Building the detailed itinerary in the background.",
                 input_payload={"selected_option_id": selected_option.id},
-                output_payload={"itinerary_title": itinerary_artifacts.itinerary["title"]},
-                steps=itinerary_artifacts.steps,
-                sources=itinerary_artifacts.sources,
+                output_payload={},
+                steps=[
+                    {"agent": "research-agent", "status": "running", "detail": "Gathering destination context, neighborhood fit, and logistics notes."},
+                    {"agent": "itinerary-agent", "status": "pending", "detail": "Waiting to build the day-by-day morning, afternoon, and evening structure."},
+                    {"agent": "booking-discovery-agent", "status": "pending", "detail": "Waiting to align flight and hotel discovery with the selected route."},
+                ],
+                sources=[],
             )
-        )
+            db.add(itinerary_run)
+    else:
+        trip.status = "saved" if trip.saved_trip is not None else "selected"
     db.commit()
-    return _serialize_trip(_get_trip_or_404(db, current_user.id, trip_id))
+    response_trip = _get_trip_or_404(db, current_user.id, trip_id)
+    if not existing_itinerary and running_itinerary_run is None:
+        schedule_itinerary_generation(trip.id, option_id)
+    return _serialize_trip(response_trip)
 
 
 @router.post("/{trip_id}/save", response_model=TripRead)
@@ -288,7 +230,7 @@ def save_trip(
     return _serialize_trip(_get_trip_or_404(db, current_user.id, trip_id))
 
 
-@router.post("/{trip_id}/duplicate", response_model=TripRead, status_code=status.HTTP_201_CREATED)
+@router.post("/{trip_id}/duplicate", response_model=TripRead, status_code=status.HTTP_202_ACCEPTED)
 def duplicate_trip(
     trip_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -305,9 +247,11 @@ def duplicate_trip(
         traveler_count=trip.traveler_count,
         pace_preference=trip.pace_preference,
     )
-    duplicate = _materialize_trip_request(db, current_user, payload, current_user.profile)
+    duplicate = _prepare_trip_request(db, current_user, payload, current_user.profile)
     db.commit()
-    return _serialize_trip(_get_trip_or_404(db, current_user.id, duplicate.id))
+    response_trip = _get_trip_or_404(db, current_user.id, duplicate.id)
+    schedule_trip_options_generation(duplicate.id)
+    return _serialize_trip(response_trip)
 
 
 @router.post("/{trip_id}/booking-selection", response_model=TripRead)

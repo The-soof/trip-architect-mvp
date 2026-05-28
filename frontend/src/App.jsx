@@ -1,11 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { startTransition, useEffect, useState } from 'react'
 import { apiRequest } from './api/client'
 import { SessionProvider, useSession } from './hooks/useSession.jsx'
 import DashboardPage from './pages/DashboardPage'
 import LandingPage from './pages/LandingPage'
+import LegalPage from './pages/LegalPage'
 import ProfilePage from './pages/ProfilePage'
 import TripDetailPage from './pages/TripDetailPage'
+
+const EMPTY_DASHBOARD = { recent_trips: [], saved_trips: [] }
 
 function ProtectedRoute({ children }) {
   const { token } = useSession()
@@ -17,16 +20,19 @@ function ProtectedRoute({ children }) {
 
 function AppRoutes() {
   const { token } = useSession()
-  const [dashboard, setDashboard] = useState({ recent_trips: [], saved_trips: [] })
+  const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD)
   const [profile, setProfile] = useState(null)
+  const [loadingWorkspace, setLoadingWorkspace] = useState(false)
 
   async function reloadDashboard() {
     if (!token) {
-      setDashboard({ recent_trips: [], saved_trips: [] })
+      setDashboard(EMPTY_DASHBOARD)
       return
     }
     const payload = await apiRequest('/trips', { token })
-    setDashboard(payload)
+    startTransition(() => {
+      setDashboard(payload)
+    })
   }
 
   async function reloadProfile() {
@@ -35,24 +41,74 @@ function AppRoutes() {
       return
     }
     const payload = await apiRequest('/profile/me', { token })
-    setProfile(payload)
+    startTransition(() => {
+      setProfile(payload)
+    })
   }
 
   useEffect(() => {
-    Promise.all([reloadDashboard(), reloadProfile()]).catch(() => {
-      setDashboard({ recent_trips: [], saved_trips: [] })
-      setProfile(null)
-    })
+    let ignore = false
+
+    async function loadWorkspace() {
+      if (!token) {
+        setDashboard(EMPTY_DASHBOARD)
+        setProfile(null)
+        setLoadingWorkspace(false)
+        return
+      }
+
+      setLoadingWorkspace(true)
+      try {
+        const [dashboardPayload, profilePayload] = await Promise.all([
+          apiRequest('/trips', { token }),
+          apiRequest('/profile/me', { token }),
+        ])
+
+        if (ignore) {
+          return
+        }
+
+        startTransition(() => {
+          setDashboard(dashboardPayload)
+          setProfile(profilePayload)
+        })
+      } catch {
+        if (ignore) {
+          return
+        }
+        setDashboard(EMPTY_DASHBOARD)
+        setProfile(null)
+      } finally {
+        if (!ignore) {
+          setLoadingWorkspace(false)
+        }
+      }
+    }
+
+    loadWorkspace()
+
+    return () => {
+      ignore = true
+    }
   }, [token])
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<LandingPage initialMode="register" />} />
+      <Route path="/sign-in" element={<LandingPage initialMode="login" />} />
+      <Route path="/sign-up" element={<LandingPage initialMode="register" />} />
+      <Route path="/privacy" element={<LegalPage type="privacy" />} />
+      <Route path="/terms" element={<LegalPage type="terms" />} />
       <Route
         path="/app"
         element={
           <ProtectedRoute>
-            <DashboardPage dashboard={dashboard} profile={profile} reloadDashboard={reloadDashboard} />
+            <DashboardPage
+              dashboard={dashboard}
+              loadingWorkspace={loadingWorkspace}
+              profile={profile}
+              reloadDashboard={reloadDashboard}
+            />
           </ProtectedRoute>
         }
       />
@@ -60,7 +116,7 @@ function AppRoutes() {
         path="/profile"
         element={
           <ProtectedRoute>
-            <ProfilePage profile={profile} reloadProfile={reloadProfile} />
+            <ProfilePage loadingWorkspace={loadingWorkspace} profile={profile} reloadProfile={reloadProfile} />
           </ProtectedRoute>
         }
       />

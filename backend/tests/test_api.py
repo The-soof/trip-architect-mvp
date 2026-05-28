@@ -1,5 +1,8 @@
+import time
+
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.services.agent_planner import _normalize_days_by_stop
 
 
@@ -33,6 +36,26 @@ def trip_payload() -> dict:
     }
 
 
+def wait_for_trip(
+    client: TestClient,
+    token: str,
+    trip_id: str,
+    predicate,
+    *,
+    attempts: int = 40,
+    delay: float = 0.05,
+) -> dict:
+    last_trip = {}
+    for _ in range(attempts):
+        response = client.get(f"/api/trips/{trip_id}", headers=auth_headers(token))
+        assert response.status_code == 200
+        last_trip = response.json()
+        if predicate(last_trip):
+            return last_trip
+        time.sleep(delay)
+    raise AssertionError(f"Timed out waiting for trip state. Last trip: {last_trip}")
+
+
 def test_register_and_me(client: TestClient) -> None:
     payload = register_user(client)
     me = client.get("/api/auth/me", headers=auth_headers(payload["access_token"]))
@@ -52,17 +75,18 @@ def test_login_rejects_wrong_password(client: TestClient) -> None:
 def test_trip_planning_flow(client: TestClient) -> None:
     token = register_user(client)["access_token"]
     response = client.post("/api/trips", headers=auth_headers(token), json=trip_payload())
-    assert response.status_code == 201
+    assert response.status_code == 202
 
     trip = response.json()
-    assert trip["status"] == "planned"
-    assert len(trip["options"]) >= 3
+    assert trip["status"] == "planning"
+    trip = wait_for_trip(client, token, trip["id"], lambda payload: payload["status"] == "planned" and len(payload["options"]) >= 3)
     assert trip["agent_runs"][0]["kind"] == "options"
 
 
 def test_select_option_generates_itinerary_and_inventory(client: TestClient) -> None:
     token = register_user(client)["access_token"]
     trip = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
+    trip = wait_for_trip(client, token, trip["id"], lambda payload: len(payload["options"]) >= 3)
     selected_option_id = trip["options"][0]["id"]
 
     response = client.post(
@@ -70,9 +94,13 @@ def test_select_option_generates_itinerary_and_inventory(client: TestClient) -> 
         headers=auth_headers(token),
     )
     assert response.status_code == 200
-    updated = response.json()
+    updated = wait_for_trip(
+        client,
+        token,
+        trip["id"],
+        lambda payload: payload["selected_option_id"] == selected_option_id and len(payload["itineraries"]) == 1,
+    )
     assert updated["selected_option_id"] == selected_option_id
-    assert len(updated["itineraries"]) == 1
     assert len(updated["itineraries"][0]["days"]) == 10
     assert len(updated["flight_options"]) >= 1
     assert len(updated["hotel_options"]) >= 1
@@ -81,6 +109,7 @@ def test_select_option_generates_itinerary_and_inventory(client: TestClient) -> 
 def test_save_trip(client: TestClient) -> None:
     token = register_user(client)["access_token"]
     trip = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
+    trip = wait_for_trip(client, token, trip["id"], lambda payload: len(payload["options"]) >= 3)
     response = client.post(
         f"/api/trips/{trip['id']}/save",
         headers=auth_headers(token),
@@ -95,6 +124,7 @@ def test_save_trip(client: TestClient) -> None:
 def test_dashboard_lists_recent_and_saved(client: TestClient) -> None:
     token = register_user(client)["access_token"]
     trip = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
+    trip = wait_for_trip(client, token, trip["id"], lambda payload: len(payload["options"]) >= 3)
     client.post(
         f"/api/trips/{trip['id']}/save",
         headers=auth_headers(token),
@@ -127,8 +157,8 @@ def test_profile_defaults_are_applied_to_new_trip(client: TestClient) -> None:
     payload["pace_preference"] = None
 
     trip_response = client.post("/api/trips", headers=auth_headers(token), json=payload)
-    assert trip_response.status_code == 201
-    trip = trip_response.json()
+    assert trip_response.status_code == 202
+    trip = wait_for_trip(client, token, trip_response.json()["id"], lambda payload: len(payload["options"]) >= 3)
     assert trip["budget_range"] == "Luxury"
     assert trip["pace_preference"] == "Slow"
     assert "Traveler profile interests: Food, Design." in trip["trip_style"]
@@ -137,13 +167,14 @@ def test_profile_defaults_are_applied_to_new_trip(client: TestClient) -> None:
 def test_duplicate_trip_creates_fresh_plan(client: TestClient) -> None:
     token = register_user(client)["access_token"]
     original = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
+    original = wait_for_trip(client, token, original["id"], lambda payload: len(payload["options"]) >= 3)
 
     duplicate_response = client.post(
         f"/api/trips/{original['id']}/duplicate",
         headers=auth_headers(token),
     )
-    assert duplicate_response.status_code == 201
-    duplicate = duplicate_response.json()
+    assert duplicate_response.status_code == 202
+    duplicate = wait_for_trip(client, token, duplicate_response.json()["id"], lambda payload: len(payload["options"]) >= 3)
     assert duplicate["id"] != original["id"]
     assert duplicate["destination_candidates"] == original["destination_candidates"]
     assert duplicate["trip_style"] == original["trip_style"]
@@ -153,11 +184,18 @@ def test_duplicate_trip_creates_fresh_plan(client: TestClient) -> None:
 def test_booking_selection_persists_and_counts_confirmed(client: TestClient) -> None:
     token = register_user(client)["access_token"]
     trip = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
+    trip = wait_for_trip(client, token, trip["id"], lambda payload: len(payload["options"]) >= 3)
     selected_option_id = trip["options"][0]["id"]
-    selected_trip = client.post(
+    client.post(
         f"/api/trips/{trip['id']}/select-option/{selected_option_id}",
         headers=auth_headers(token),
-    ).json()
+    )
+    selected_trip = wait_for_trip(
+        client,
+        token,
+        trip["id"],
+        lambda payload: payload["selected_option_id"] == selected_option_id and len(payload["flight_options"]) >= 1 and len(payload["hotel_options"]) >= 1,
+    )
 
     flight_id = selected_trip["flight_options"][0]["id"]
     hotel_id = selected_trip["hotel_options"][0]["id"]
@@ -216,3 +254,64 @@ def test_normalize_days_by_stop_accepts_agent_city_night_maps() -> None:
         {"city": "Barcelona", "nights": 3, "start_day": 1, "end_day": 3},
         {"city": "Split", "nights": 5, "start_day": 4, "end_day": 8},
     ]
+
+
+def test_trip_planning_records_fallback_reason_when_live_agent_fails(client: TestClient, monkeypatch) -> None:
+    token = register_user(client)["access_token"]
+
+    monkeypatch.setattr(
+        "app.api.trips.get_settings",
+        lambda: Settings(
+            app_env="test",
+            database_url="sqlite:///./test_trip_architect.db",
+            jwt_secret_key="test-secret",
+            enable_real_agent=True,
+            google_api_key="test-google",
+            tavily_api_key="test-tavily",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.trip_jobs.get_settings",
+        lambda: Settings(
+            app_env="test",
+            database_url="sqlite:///./test_trip_architect.db",
+            jwt_secret_key="test-secret",
+            enable_real_agent=True,
+            google_api_key="test-google",
+            tavily_api_key="test-tavily",
+        ),
+    )
+
+    def raise_live_agent_failure(*args, **kwargs):
+        raise RuntimeError("429 RESOURCE_EXHAUSTED: quota depleted")
+
+    monkeypatch.setattr("app.services.agent_planner.TripPlanner._generate_with_deepagents", raise_live_agent_failure)
+
+    response = client.post("/api/trips", headers=auth_headers(token), json=trip_payload())
+
+    assert response.status_code == 202
+    trip = wait_for_trip(
+        client,
+        token,
+        response.json()["id"],
+        lambda payload: payload["status"] == "planned" and "fallback_reason" in payload["agent_runs"][0]["output_payload"],
+    )
+    assert trip["planning_mode"] == "mock"
+    assert trip["agent_runs"][0]["output_payload"]["fallback_reason"].startswith("Gemini capacity is currently unavailable")
+    assert trip["agent_runs"][0]["steps"][-1]["agent"] == "fallback-guard"
+
+
+def test_trip_create_returns_pending_workspace_when_background_job_is_not_run(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    token = register_user(client)["access_token"]
+    monkeypatch.setattr("app.api.trips.schedule_trip_options_generation", lambda trip_id: None)
+
+    response = client.post("/api/trips", headers=auth_headers(token), json=trip_payload())
+
+    assert response.status_code == 202
+    trip = response.json()
+    assert trip["status"] == "planning"
+    assert trip["options"] == []
+    assert trip["agent_runs"][0]["status"] == "running"

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { apiRequest } from '../api/client'
 import { useSession } from '../hooks/useSession.jsx'
 
@@ -13,13 +13,17 @@ const DEFAULT_LOGIN = {
   password: '',
 }
 
-export default function AuthPanel() {
+export default function AuthPanel({ initialMode = 'register' }) {
   const { setSession } = useSession()
-  const [mode, setMode] = useState('register')
+  const [mode, setMode] = useState(initialMode)
   const [registerForm, setRegisterForm] = useState(DEFAULT_REGISTER)
   const [loginForm, setLoginForm] = useState(DEFAULT_LOGIN)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setMode(initialMode)
+  }, [initialMode])
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -42,6 +46,16 @@ export default function AuthPanel() {
 
   return (
     <section className="auth-panel">
+      <div className="auth-panel-header">
+        <p className="eyebrow">{mode === 'register' ? 'Create your workspace' : 'Welcome back'}</p>
+        <h2>{mode === 'register' ? 'Start planning with a saved traveler profile.' : 'Continue with your existing trips.'}</h2>
+        <p>
+          {mode === 'register'
+            ? 'Create an account to save routes, revisit old plans, and keep booking details attached to the same trip.'
+            : 'Sign in to reopen saved trips, duplicate a past itinerary, or keep refining a current plan.'}
+        </p>
+      </div>
+
       <div className="panel-switch">
         <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')} type="button">
           Create account
@@ -92,7 +106,7 @@ export default function AuthPanel() {
           />
         </label>
 
-        {error ? <p className="inline-error">{error}</p> : null}
+        {error ? <p className="inline-error" role="alert">{error}</p> : null}
 
         <button className="primary-button" disabled={loading} type="submit">
           {loading ? 'Working...' : mode === 'register' ? 'Start planning' : 'Continue planning'}

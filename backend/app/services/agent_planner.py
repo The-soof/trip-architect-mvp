@@ -119,6 +119,7 @@ class PlanningArtifacts:
     options: list[dict[str, Any]]
     sources: list[dict[str, Any]]
     steps: list[dict[str, Any]]
+    fallback_reason: str | None = None
 
 
 @dataclass
@@ -130,6 +131,7 @@ class ItineraryArtifacts:
     hotels: list[dict[str, Any]]
     sources: list[dict[str, Any]]
     steps: list[dict[str, Any]]
+    fallback_reason: str | None = None
 
 
 def _trip_length(payload: TripCreateRequest) -> int:
@@ -371,6 +373,16 @@ def _extract_json_payload(raw_text: str) -> dict[str, Any]:
     return json.loads(trimmed[start : end + 1])
 
 
+def _fallback_reason_from_exception(exc: Exception) -> str:
+    message = str(exc).strip() or exc.__class__.__name__
+    lowered = message.lower()
+    if "resource_exhausted" in lowered or "429" in lowered or "quota" in lowered or "credit" in lowered:
+        return "Gemini capacity is currently unavailable, so Trip Architect switched to the structured fallback planner."
+    if "api key" in lowered or "permission" in lowered or "auth" in lowered:
+        return "The live AI provider credentials were rejected, so Trip Architect switched to the structured fallback planner."
+    return f"Live agent planning was unavailable ({message[:160]}), so Trip Architect switched to the structured fallback planner."
+
+
 class TripPlanner:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -379,19 +391,23 @@ class TripPlanner:
         if self.settings.enable_real_agent and self.settings.tavily_api_key and self.settings.google_api_key:
             try:
                 return self._generate_with_deepagents(payload)
-            except Exception:
-                pass
+            except Exception as exc:
+                return self._generate_mock_options(payload, fallback_reason=_fallback_reason_from_exception(exc))
         return self._generate_mock_options(payload)
 
     def generate_itinerary(self, payload: TripCreateRequest, selected_option: dict[str, Any]) -> ItineraryArtifacts:
         if self.settings.enable_real_agent and self.settings.tavily_api_key and self.settings.google_api_key:
             try:
                 return self._generate_deep_itinerary(payload, selected_option)
-            except Exception:
-                pass
+            except Exception as exc:
+                return self._generate_mock_itinerary(payload, selected_option, fallback_reason=_fallback_reason_from_exception(exc))
         return self._generate_mock_itinerary(payload, selected_option)
 
-    def _generate_mock_options(self, payload: TripCreateRequest) -> PlanningArtifacts:
+    def _generate_mock_options(
+        self,
+        payload: TripCreateRequest,
+        fallback_reason: str | None = None,
+    ) -> PlanningArtifacts:
         trip_days = _trip_length(payload)
         candidates = payload.destination_candidates[:4]
         combos: list[list[str]] = []
@@ -448,15 +464,27 @@ class TripPlanner:
             {"agent": "budget-agent", "status": "completed", "detail": "Estimated flight, lodging, food, and local transit ranges."},
             {"agent": "planner-agent", "status": "completed", "detail": "Ranked options by fit, pacing, and estimated spend."},
         ]
+        if fallback_reason:
+            steps.append({"agent": "fallback-guard", "status": "warning", "detail": fallback_reason})
         return PlanningArtifacts(
             mode="mock",
-            planning_summary=f"Generated {len(options)} trip options with structured routing and budget estimates.",
+            planning_summary=(
+                f"Generated {len(options)} trip options with structured routing and budget estimates."
+                if not fallback_reason
+                else f"Generated {len(options)} trip options with the structured fallback planner after the live agent path failed."
+            ),
             options=options,
             sources=_planning_sources(candidates, "mock"),
             steps=steps,
+            fallback_reason=fallback_reason,
         )
 
-    def _generate_mock_itinerary(self, payload: TripCreateRequest, selected_option: dict[str, Any]) -> ItineraryArtifacts:
+    def _generate_mock_itinerary(
+        self,
+        payload: TripCreateRequest,
+        selected_option: dict[str, Any],
+        fallback_reason: str | None = None,
+    ) -> ItineraryArtifacts:
         allocations = selected_option["days_by_stop"]
         keywords = _style_keywords(payload.trip_style) or {"food", "culture", "relaxation"}
         day_rows = []
@@ -564,14 +592,17 @@ class TripPlanner:
             {"agent": "itinerary-agent", "status": "completed", "detail": "Drafted daily morning, afternoon, and evening structure."},
             {"agent": "booking-discovery-agent", "status": "completed", "detail": "Prepared flight and hotel link-out options aligned to the route."},
         ]
+        if fallback_reason:
+            steps.append({"agent": "fallback-guard", "status": "warning", "detail": fallback_reason})
         return ItineraryArtifacts(
             mode="mock",
-            summary=summary,
+            summary=summary if not fallback_reason else "Built the itinerary with the structured fallback planner after the live agent path failed.",
             itinerary=itinerary,
             flights=flights,
             hotels=hotels,
             sources=_planning_sources(selected_option["destination_order"], "mock"),
             steps=steps,
+            fallback_reason=fallback_reason,
         )
 
     def _generate_with_deepagents(self, payload: TripCreateRequest) -> PlanningArtifacts:

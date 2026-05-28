@@ -18,17 +18,25 @@ export default function TripDetailPage() {
   const [bookingSavingKey, setBookingSavingKey] = useState('')
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    async function loadTrip() {
-      try {
-        const payload = await apiRequest(`/trips/${tripId}`, { token })
-        setTrip(payload)
-      } catch (loadError) {
+  async function loadTrip({ silent = false } = {}) {
+    try {
+      const payload = await apiRequest(`/trips/${tripId}`, { token })
+      setTrip(payload)
+      if (!silent) {
+        setError('')
+      }
+    } catch (loadError) {
+      if (!silent) {
         setError(loadError.message)
-      } finally {
+      }
+    } finally {
+      if (!silent) {
         setLoading(false)
       }
     }
+  }
+
+  useEffect(() => {
     loadTrip()
   }, [token, tripId])
 
@@ -37,6 +45,30 @@ export default function TripDetailPage() {
     [trip],
   )
   const itinerary = trip?.itineraries[0] || null
+  const latestOptionsRun = useMemo(
+    () => [...(trip?.agent_runs || [])].reverse().find((run) => run.kind === 'options') || null,
+    [trip],
+  )
+  const latestItineraryRun = useMemo(
+    () => [...(trip?.agent_runs || [])].reverse().find((run) => run.kind === 'itinerary') || null,
+    [trip],
+  )
+  const fallbackReason =
+    latestItineraryRun?.output_payload?.fallback_reason || latestOptionsRun?.output_payload?.fallback_reason || ''
+  const failedReason = latestItineraryRun?.output_payload?.error || latestOptionsRun?.output_payload?.error || ''
+  const isPlanningOptions = trip?.status === 'planning'
+  const isBuildingItinerary = trip?.status === 'building_itinerary'
+  const isPending = isPlanningOptions || isBuildingItinerary
+
+  useEffect(() => {
+    if (!isPending) {
+      return undefined
+    }
+    const intervalId = window.setInterval(() => {
+      loadTrip({ silent: true })
+    }, 2500)
+    return () => window.clearInterval(intervalId)
+  }, [isPending, tripId, token])
 
   async function handleSelect(optionId) {
     setSelectingOptionId(optionId)
@@ -123,6 +155,22 @@ export default function TripDetailPage() {
     >
       {error ? <p className="inline-error">{error}</p> : null}
 
+      {fallbackReason ? (
+        <section className="surface-card planner-notice" aria-live="polite">
+          <p className="eyebrow">Planner status</p>
+          <h2>Using the structured fallback planner for this trip.</h2>
+          <p>{fallbackReason}</p>
+        </section>
+      ) : null}
+
+      {trip.status === 'failed' ? (
+        <section className="surface-card planner-notice planner-error" aria-live="polite">
+          <p className="eyebrow">Planner status</p>
+          <h2>Trip generation hit an error before the workspace was completed.</h2>
+          <p>{failedReason || 'The planner stopped unexpectedly. You can return to the dashboard and try again.'}</p>
+        </section>
+      ) : null}
+
       <section className="surface-card summary-strip">
         <div>
           <p className="eyebrow">Trip brief</p>
@@ -136,6 +184,31 @@ export default function TripDetailPage() {
         </div>
       </section>
 
+      {isPlanningOptions ? (
+        <section className="surface-card planner-status-card" aria-live="polite">
+          <p className="eyebrow">Planning run in progress</p>
+          <h2>Generating route options for this trip brief.</h2>
+          <p>
+            The workspace is live already. Trip Architect is now comparing destination combinations, tradeoffs, and
+            budget ranges in the background.
+          </p>
+          <div className="status-step-list">
+            <div className="status-step">
+              <strong>1. Intake agent</strong>
+              <span>Normalizing dates, origin, traveler count, and trip intent.</span>
+            </div>
+            <div className="status-step">
+              <strong>2. Routing + research agents</strong>
+              <span>Evaluating feasible stop combinations and destination fit.</span>
+            </div>
+            <div className="status-step">
+              <strong>3. Budget + planner agents</strong>
+              <span>Estimating spend bands and ranking the strongest options.</span>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="options-grid">
         {trip.options.map((option) => (
           <OptionCard
@@ -148,7 +221,48 @@ export default function TripDetailPage() {
         ))}
       </section>
 
-      <Timeline itinerary={itinerary} />
+      {!trip.options.length && !isPlanningOptions && trip.status !== 'failed' ? (
+        <section className="surface-card planner-notice">
+          <p className="eyebrow">Trip options</p>
+          <h2>Route options will appear here as soon as planning finishes.</h2>
+          <p>This workspace refreshes automatically while the planning job is still running.</p>
+        </section>
+      ) : null}
+
+      {isBuildingItinerary || selectingOptionId ? (
+        <section className="surface-card planner-status-card" aria-live="polite">
+          <p className="eyebrow">Detailed planning in progress</p>
+          <h2>Expanding the selected route into a day-by-day trip workspace.</h2>
+          <p>
+            Trip Architect is building itinerary structure, neighborhood guidance, and booking discovery for the
+            selected option.
+          </p>
+          <div className="status-step-list">
+            <div className="status-step">
+              <strong>1. Research agent</strong>
+              <span>Checking destination fit, seasonality, and logistics context.</span>
+            </div>
+            <div className="status-step">
+              <strong>2. Itinerary agent</strong>
+              <span>Drafting daily morning, afternoon, and evening suggestions.</span>
+            </div>
+            <div className="status-step">
+              <strong>3. Booking discovery agent</strong>
+              <span>Preparing flight and stay options that match the chosen route.</span>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {itinerary ? <Timeline itinerary={itinerary} /> : null}
+
+      {selectedOption && !itinerary && !isBuildingItinerary && trip.status !== 'failed' ? (
+        <section className="surface-card planner-notice">
+          <p className="eyebrow">Itinerary detail</p>
+          <h2>The selected route is saved. A detailed itinerary will appear here after expansion runs.</h2>
+          <p>Choose the route you want to deepen and Trip Architect will build the daily plan and booking discovery.</p>
+        </section>
+      ) : null}
 
       {trip.flight_options.length || trip.hotel_options.length ? (
         <InventoryPanel

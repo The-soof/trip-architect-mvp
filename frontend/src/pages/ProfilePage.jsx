@@ -7,7 +7,7 @@ function interestsToString(interests) {
   return (interests || []).join(', ')
 }
 
-export default function ProfilePage({ profile, reloadProfile }) {
+export default function ProfilePage({ loadingWorkspace, profile, reloadProfile }) {
   const { token } = useSession()
   const [form, setForm] = useState({
     home_airport: '',
@@ -64,11 +64,20 @@ export default function ProfilePage({ profile, reloadProfile }) {
       title="Traveler profile and planning preferences"
       subtitle="Set defaults once so new trips inherit your pacing, budget, and interest signals."
     >
+      {loadingWorkspace ? (
+        <section className="surface-card planner-notice" aria-live="polite">
+          <p className="eyebrow">Syncing profile</p>
+          <h2>Loading the latest traveler defaults.</h2>
+          <p>Your saved preferences will appear here as soon as they finish loading.</p>
+        </section>
+      ) : null}
+
       <form className="planner-form surface-card" onSubmit={handleSubmit}>
         <div className="form-grid">
           <label>
             Home airport
             <input
+              disabled={loadingWorkspace}
               onChange={(event) => setForm((current) => ({ ...current, home_airport: event.target.value }))}
               placeholder="JFK"
               value={form.home_airport}
@@ -78,6 +87,7 @@ export default function ProfilePage({ profile, reloadProfile }) {
           <label>
             Default budget
             <select
+              disabled={loadingWorkspace}
               onChange={(event) => setForm((current) => ({ ...current, budget_preference: event.target.value }))}
               value={form.budget_preference}
             >
@@ -90,6 +100,7 @@ export default function ProfilePage({ profile, reloadProfile }) {
           <label>
             Preferred pace
             <select
+              disabled={loadingWorkspace}
               onChange={(event) => setForm((current) => ({ ...current, pace_preference: event.target.value }))}
               value={form.pace_preference}
             >
@@ -102,6 +113,7 @@ export default function ProfilePage({ profile, reloadProfile }) {
           <label>
             Interests
             <input
+              disabled={loadingWorkspace}
               onChange={(event) => setForm((current) => ({ ...current, interests: event.target.value }))}
               placeholder="food, nightlife, water, architecture"
               value={form.interests}
@@ -120,7 +132,7 @@ export default function ProfilePage({ profile, reloadProfile }) {
         {message ? <p className="inline-success">{message}</p> : null}
         {error ? <p className="inline-error">{error}</p> : null}
 
-        <button className="primary-button" disabled={saving} type="submit">
+        <button className="primary-button" disabled={loadingWorkspace || saving} type="submit">
           {saving ? 'Saving...' : 'Save preferences'}
         </button>
       </form>

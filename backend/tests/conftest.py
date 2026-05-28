@@ -16,6 +16,7 @@ os.environ["TAVILY_API_KEY"] = ""
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.services import trip_jobs  # noqa: E402
 
 engine = create_engine("sqlite:///./test_trip_architect.db", connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
@@ -36,6 +37,12 @@ def setup_database() -> Generator[None, None, None]:
     app.dependency_overrides[get_db] = override_get_db
     yield
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def run_background_jobs_inline(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.api.trips.schedule_trip_options_generation", trip_jobs._run_trip_options_generation)
+    monkeypatch.setattr("app.api.trips.schedule_itinerary_generation", trip_jobs._run_itinerary_generation)
 
 
 @pytest.fixture
