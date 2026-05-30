@@ -41,6 +41,14 @@ class SaveTripRequest(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
 
 
+class RegenerateRequest(BaseModel):
+    feedback: str = Field(
+        default="",
+        max_length=600,
+        description="Optional user feedback to steer the regenerated options (e.g. 'fewer stops', 'more beach focus').",
+    )
+
+
 class BookingSelectionRequest(BaseModel):
     booking_type: str = Field(pattern="^(flight|hotel)$")
     option_id: str = Field(min_length=8, max_length=64)
@@ -142,6 +150,10 @@ class HotelOptionRead(BaseModel):
     source_name: str
     booking_url: str
     match_reason: str
+    address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    maps_url: str | None = None
 
 
 class ConfirmedBookingRead(BaseModel):
@@ -200,6 +212,8 @@ class TripRead(BaseModel):
     planning_mode: str
     status: str
     selected_option_id: str | None
+    flight_selection_locked: bool
+    locked_flight_option_id: str | None
     created_at: datetime
     updated_at: datetime
     options: list[TripOptionRead]

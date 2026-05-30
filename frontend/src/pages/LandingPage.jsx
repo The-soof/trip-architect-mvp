@@ -68,7 +68,7 @@ export default function LandingPage({ initialMode = 'register' }) {
             </article>
             <article>
               <strong>2</strong>
-              <span>planning modes ready for mock research or deeper agent-backed runs</span>
+              <span>planning modes ready for fast Gemini routing or deeper research-backed itinerary runs</span>
             </article>
           </div>
         </div>

@@ -106,6 +106,43 @@ def test_select_option_generates_itinerary_and_inventory(client: TestClient) -> 
     assert len(updated["hotel_options"]) >= 1
 
 
+def test_selected_trip_blocks_regeneration_and_route_changes(client: TestClient) -> None:
+    token = register_user(client)["access_token"]
+    trip = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
+    trip = wait_for_trip(client, token, trip["id"], lambda payload: len(payload["options"]) >= 2)
+    selected_option_id = trip["options"][0]["id"]
+    alternate_option_id = trip["options"][1]["id"]
+
+    select_response = client.post(
+        f"/api/trips/{trip['id']}/select-option/{selected_option_id}",
+        headers=auth_headers(token),
+    )
+    assert select_response.status_code == 200
+
+    selected_trip = wait_for_trip(
+        client,
+        token,
+        trip["id"],
+        lambda payload: payload["selected_option_id"] == selected_option_id,
+    )
+    assert selected_trip["selected_option_id"] == selected_option_id
+
+    regenerate_response = client.post(
+        f"/api/trips/{trip['id']}/regenerate",
+        headers=auth_headers(token),
+        json={"feedback": "Try fewer stops."},
+    )
+    assert regenerate_response.status_code == 409
+    assert "cannot be changed or regenerated" in regenerate_response.json()["detail"]
+
+    reselection_response = client.post(
+        f"/api/trips/{trip['id']}/select-option/{alternate_option_id}",
+        headers=auth_headers(token),
+    )
+    assert reselection_response.status_code == 409
+    assert "cannot be changed" in reselection_response.json()["detail"]
+
+
 def test_save_trip(client: TestClient) -> None:
     token = register_user(client)["access_token"]
     trip = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
@@ -244,6 +281,50 @@ def test_booking_selection_persists_and_counts_confirmed(client: TestClient) -> 
     assert cleared_trip["saved_trip"]["confirmed_booking_count"] == 0
 
 
+def test_saved_flight_locks_future_flight_changes(client: TestClient) -> None:
+    token = register_user(client)["access_token"]
+    trip = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
+    trip = wait_for_trip(client, token, trip["id"], lambda payload: len(payload["options"]) >= 2)
+    selected_option_id = trip["options"][0]["id"]
+
+    client.post(
+        f"/api/trips/{trip['id']}/select-option/{selected_option_id}",
+        headers=auth_headers(token),
+    )
+    selected_trip = wait_for_trip(
+        client,
+        token,
+        trip["id"],
+        lambda payload: payload["selected_option_id"] == selected_option_id and len(payload["flight_options"]) >= 1,
+    )
+    flight_id = selected_trip["flight_options"][0]["id"]
+
+    save_flight = client.post(
+        f"/api/trips/{trip['id']}/booking-selection",
+        headers=auth_headers(token),
+        json={
+            "booking_type": "flight",
+            "option_id": flight_id,
+            "selection_state": "saved",
+        },
+    )
+    assert save_flight.status_code == 200
+    locked_trip = save_flight.json()
+    assert locked_trip["flight_selection_locked"] is True
+    assert locked_trip["locked_flight_option_id"] == flight_id
+
+    clear_flight_response = client.post(
+        f"/api/trips/{trip['id']}/booking-selection",
+        headers=auth_headers(token),
+        json={
+            "booking_type": "flight",
+            "option_id": flight_id,
+            "selection_state": "none",
+        },
+    )
+    assert clear_flight_response.status_code == 409
+
+
 def test_normalize_days_by_stop_accepts_agent_city_night_maps() -> None:
     normalized = _normalize_days_by_stop(
         [{"Barcelona": 3}, {"Split": 5}],
@@ -266,16 +347,14 @@ def test_trip_planning_records_fallback_reason_when_live_agent_fails(client: Tes
             database_url="sqlite:///./test_trip_architect.db",
             jwt_secret_key="test-secret",
             enable_real_agent=True,
-            openai_api_key="test-openai",
-            openai_base_url="https://example.com/v1",
-            tavily_api_key="test-tavily",
+            gemini_api_key="test-gemini",
         ),
     )
 
     def raise_live_agent_failure(*args, **kwargs):
         raise RuntimeError("429 RESOURCE_EXHAUSTED: quota depleted")
 
-    monkeypatch.setattr("app.services.agent_planner.TripPlanner._generate_with_deepagents", raise_live_agent_failure)
+    monkeypatch.setattr("app.services.agent_planner.TripPlanner._generate_with_gemini_options", raise_live_agent_failure)
 
     response = client.post("/api/trips", headers=auth_headers(token), json=trip_payload())
 
@@ -288,18 +367,18 @@ def test_trip_planning_records_fallback_reason_when_live_agent_fails(client: Tes
     )
     assert trip["planning_mode"] == "mock"
     assert trip["agent_runs"][0]["output_payload"]["fallback_reason"].startswith(
-        "The live DeepSeek-compatible endpoint is currently unavailable"
+        "The live Gemini, Tavily, or Google Places pipeline is currently unavailable"
     )
     assert trip["agent_runs"][0]["steps"][-1]["agent"] == "fallback-guard"
 
 
-def test_trip_planning_bounds_deep_agent_enum_text(client: TestClient, monkeypatch) -> None:
+def test_trip_planning_bounds_gemini_enum_text(client: TestClient, monkeypatch) -> None:
     token = register_user(client)["access_token"]
 
-    def fake_deep_agent_options(*args, **kwargs):
+    def fake_gemini_options(*args, **kwargs):
         return PlanningArtifacts(
-            mode="deepagents",
-            planning_summary="Agent produced verbose labels.",
+            mode="gemini",
+            planning_summary="Gemini produced verbose labels.",
             options=[
                 {
                     "name": "Barcelona food weekend",
@@ -319,13 +398,13 @@ def test_trip_planning_bounds_deep_agent_enum_text(client: TestClient, monkeypat
             steps=[],
         )
 
-    monkeypatch.setattr("app.services.agent_planner.TripPlanner.generate_trip_options", fake_deep_agent_options)
+    monkeypatch.setattr("app.services.agent_planner.TripPlanner.generate_trip_options", fake_gemini_options)
 
     response = client.post("/api/trips", headers=auth_headers(token), json=trip_payload())
 
     assert response.status_code == 202
     trip = wait_for_trip(client, token, response.json()["id"], lambda payload: payload["status"] == "planned")
-    assert trip["planning_mode"] == "deepagents"
+    assert trip["planning_mode"] == "gemini"
     assert len(trip["options"][0]["pace_label"]) <= 40
     assert trip["options"][0]["budget_confidence"] == "medium"
 

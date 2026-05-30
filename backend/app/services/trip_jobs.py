@@ -269,6 +269,10 @@ def _run_itinerary_generation(trip_id: str, option_id: str) -> None:
                     source_name=_bounded_text(hotel["source_name"], 60, "Hotel source"),
                     booking_url=hotel["booking_url"],
                     match_reason=hotel["match_reason"],
+                    address=_bounded_text(hotel.get("address"), 255) or None,
+                    latitude=hotel.get("latitude"),
+                    longitude=hotel.get("longitude"),
+                    maps_url=hotel.get("maps_url"),
                 )
             )
 

@@ -20,6 +20,10 @@ export default function TripDetailPage() {
   const [bookingSavingKey, setBookingSavingKey] = useState('')
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('Options')
+  const [showRegenerateForm, setShowRegenerateForm] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const [regenerateFeedback, setRegenerateFeedback] = useState('')
+  const [pendingSelectionOptionId, setPendingSelectionOptionId] = useState('')
 
   async function loadTrip({ silent = false } = {}) {
     try {
@@ -61,6 +65,8 @@ export default function TripDetailPage() {
   const failedReason = latestItineraryRun?.output_payload?.error || latestOptionsRun?.output_payload?.error || ''
   const isPlanningOptions = trip?.status === 'planning'
   const isBuildingItinerary = trip?.status === 'building_itinerary'
+  const isTripLocked = Boolean(trip?.selected_option_id)
+  const isFlightLocked = trip?.flight_selection_locked
   const isPending = isPlanningOptions || isBuildingItinerary
   const showPlanningScreen = isPlanningOptions && !trip?.options.length
   const requiresSelectedOption = activeTab !== 'Options'
@@ -75,14 +81,27 @@ export default function TripDetailPage() {
     return () => window.clearInterval(intervalId)
   }, [isPending, tripId, token])
 
-  async function handleSelect(optionId) {
-    setSelectingOptionId(optionId)
+  function handleSelectIntent(optionId) {
+    if (isTripLocked) {
+      return
+    }
+    setPendingSelectionOptionId(optionId)
+    setError('')
+  }
+
+  async function handleConfirmSelection() {
+    if (!trip || !pendingSelectionOptionId) {
+      return
+    }
+    setSelectingOptionId(pendingSelectionOptionId)
     try {
-      const payload = await apiRequest(`/trips/${trip.id}/select-option/${optionId}`, {
+      const payload = await apiRequest(`/trips/${trip.id}/select-option/${pendingSelectionOptionId}`, {
         method: 'POST',
         token,
       })
       setTrip(payload)
+      setActiveTab('Options')
+      setPendingSelectionOptionId('')
     } catch (selectError) {
       setError(selectError.message)
     } finally {
@@ -130,6 +149,26 @@ export default function TripDetailPage() {
       setError(selectionError.message)
     } finally {
       setBookingSavingKey('')
+    }
+  }
+
+  async function handleRegenerate() {
+    setRegenerating(true)
+    setError('')
+    try {
+      const payload = await apiRequest(`/trips/${trip.id}/regenerate`, {
+        method: 'POST',
+        token,
+        body: { feedback: regenerateFeedback.trim() },
+      })
+      setTrip(payload)
+      setShowRegenerateForm(false)
+      setRegenerateFeedback('')
+      setActiveTab('Options')
+    } catch (regenError) {
+      setError(regenError.message)
+    } finally {
+      setRegenerating(false)
     }
   }
 
@@ -191,12 +230,94 @@ export default function TripDetailPage() {
       title={trip.destination_candidates.join(' · ')}
       subtitle={`${trip.origin} · ${tripWindow(trip.start_date, trip.end_date)} · ${trip.status}`}
       actions={
-        <button className="primary-button" disabled={saving} onClick={handleSave} type="button">
-          {trip.saved_trip ? 'Saved to dashboard' : saving ? 'Saving...' : 'Save trip'}
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {!isPending && !isTripLocked && !isFlightLocked && (
+            <button
+              className="ghost-button"
+              disabled={regenerating}
+              id="regenerate-trip-btn"
+              onClick={() => setShowRegenerateForm((prev) => !prev)}
+              type="button"
+            >
+              {showRegenerateForm ? 'Cancel' : 'Adjust \u0026 Regenerate'}
+            </button>
+          )}
+          <button className="primary-button" disabled={saving} onClick={handleSave} type="button">
+            {trip.saved_trip ? 'Saved to dashboard' : saving ? 'Saving...' : 'Save trip'}
+          </button>
+        </div>
       }
     >
       {error ? <p className="inline-error">{error}</p> : null}
+
+      {isTripLocked ? (
+        <section className="surface-card planner-notice planner-lock-notice" aria-live="polite">
+          <p className="eyebrow">Trip locked</p>
+          <h2>This route is locked in and cannot be changed.</h2>
+          <p>
+            The selected option is now your committed trip direction. Other routes are disabled, regeneration is off,
+            and itinerary, hotel, and flight discovery will continue building around this route only.
+          </p>
+        </section>
+      ) : null}
+
+      {isFlightLocked ? (
+        <section className="surface-card planner-notice" aria-live="polite">
+          <p className="eyebrow">Flight locked</p>
+          <h2>A flight has been saved, so this route is now permanent.</h2>
+          <p>You can still review the itinerary, stays, and the saved flight, but you can no longer regenerate options or switch to another route.</p>
+        </section>
+      ) : null}
+
+      {showRegenerateForm ? (
+        <section className="surface-card regenerate-form-card" aria-label="Adjust and regenerate">
+          <p className="eyebrow">Adjust \u0026 Regenerate</p>
+          <h2>Update your preferences and get fresh options.</h2>
+          <p>Describe what you\'d like changed — fewer stops, more beach, lower budget, specific vibe, etc. Your feedback will be included in the next planning run.</p>
+          <label htmlFor="regen-feedback-input">
+            What should the planner change?
+            <textarea
+              id="regen-feedback-input"
+              maxLength={600}
+              onChange={(e) => setRegenerateFeedback(e.target.value)}
+              placeholder="e.g. Fewer stops, more time in each city. Focus on beach destinations over nightlife."
+              rows={3}
+              value={regenerateFeedback}
+            />
+          </label>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              className="primary-button"
+              disabled={regenerating}
+              id="confirm-regenerate-btn"
+              onClick={handleRegenerate}
+              type="button"
+            >
+              {regenerating ? 'Regenerating...' : 'Regenerate options'}
+            </button>
+            <button
+              className="ghost-button"
+              onClick={() => { setShowRegenerateForm(false); setRegenerateFeedback('') }}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {trip.planning_mode === 'mock' ? (
+        <section className="surface-card planner-notice planner-mock-notice" aria-label="Mock mode notice">
+          <p className="eyebrow">Sandbox mode active</p>
+          <h2>This trip was planned using the deterministic fallback planner, not the live Gemini pipeline.</h2>
+          <p>
+            Route options, cost estimates, and itinerary structure are generated by a deterministic local algorithm.
+            Booking links are real and will open Kayak or Booking.com pre-filled with your dates,
+            but prices and hotel names are placeholders. The live Gemini and research pipeline is enabled and will activate
+            automatically on your next trip.
+          </p>
+        </section>
+      ) : null}
 
       {fallbackReason ? (
         <section className="surface-card planner-notice" aria-live="polite">
@@ -282,8 +403,11 @@ export default function TripDetailPage() {
               <OptionCard
                 active={selectedOption?.id === option.id}
                 key={option.id}
-                onSelect={handleSelect}
+                onSelect={handleSelectIntent}
                 option={option}
+                selectionDisabled={Boolean(isTripLocked && selectedOption?.id !== option.id)}
+                selectionLabel="Trip locked"
+                selectionLocked={Boolean(isTripLocked && selectedOption?.id === option.id)}
                 selecting={selectingOptionId === option.id}
               />
             ))}
@@ -318,8 +442,10 @@ export default function TripDetailPage() {
           <InventoryPanel
             bookingSavingKey={bookingSavingKey}
             confirmedBookings={trip.confirmed_bookings}
+            flightSelectionLocked={trip.flight_selection_locked}
             flights={trip.flight_options}
             hotels={trip.hotel_options}
+            lockedFlightOptionId={trip.locked_flight_option_id}
             mode="hotels"
             onUpdateBookingSelection={handleBookingSelection}
           />
@@ -331,8 +457,10 @@ export default function TripDetailPage() {
           <InventoryPanel
             bookingSavingKey={bookingSavingKey}
             confirmedBookings={trip.confirmed_bookings}
+            flightSelectionLocked={trip.flight_selection_locked}
             flights={trip.flight_options}
             hotels={trip.hotel_options}
+            lockedFlightOptionId={trip.locked_flight_option_id}
             mode="flights"
             onUpdateBookingSelection={handleBookingSelection}
           />
@@ -363,6 +491,43 @@ export default function TripDetailPage() {
           ))}
         </div>
       </section>
+
+      {pendingSelectionOptionId ? (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            aria-describedby="trip-lock-modal-copy"
+            aria-labelledby="trip-lock-modal-title"
+            aria-modal="true"
+            className="modal-card surface-card"
+            role="dialog"
+          >
+            <p className="eyebrow">Confirm trip selection</p>
+            <h2 id="trip-lock-modal-title">Once a trip is selected it cannot be changed</h2>
+            <p id="trip-lock-modal-copy">
+              Confirming this route will permanently lock the trip choice. After that, Trip Architect will build the
+              itinerary, hotel recommendations, and flight options for this route only.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="primary-button"
+                disabled={Boolean(selectingOptionId)}
+                onClick={handleConfirmSelection}
+                type="button"
+              >
+                {selectingOptionId ? 'Confirming...' : 'Confirm'}
+              </button>
+              <button
+                className="ghost-button"
+                disabled={Boolean(selectingOptionId)}
+                onClick={() => setPendingSelectionOptionId('')}
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </AppShell>
   )
 }

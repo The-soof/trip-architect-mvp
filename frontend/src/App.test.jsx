@@ -69,6 +69,8 @@ test('trip detail shows background planning state while options are still genera
     planning_mode: 'mock',
     status: 'planning',
     selected_option_id: null,
+    flight_selection_locked: false,
+    locked_flight_option_id: null,
     created_at: '2026-05-28T07:00:00Z',
     updated_at: '2026-05-28T07:00:00Z',
     options: [],
@@ -152,9 +154,11 @@ test('trip detail blocks itinerary tabs until a route option is selected', async
     budget_range: 'Mid-range',
     traveler_count: 2,
     pace_preference: 'Balanced',
-    planning_mode: 'deepagents',
-    status: 'selected',
+    planning_mode: 'gemini',
+    status: 'planned',
     selected_option_id: null,
+    flight_selection_locked: false,
+    locked_flight_option_id: null,
     created_at: '2026-05-28T07:00:00Z',
     updated_at: '2026-05-28T07:00:00Z',
     options: [
@@ -171,6 +175,7 @@ test('trip detail blocks itinerary tabs until a route option is selected', async
         estimated_total_min: 3200,
         estimated_total_max: 4100,
         pace_label: 'Balanced',
+        budget_confidence: 'medium',
         cost_breakdown: {
           flights: { min: 1200, max: 1500 },
           lodging: { min: 1300, max: 1800 },
@@ -180,6 +185,8 @@ test('trip detail blocks itinerary tabs until a route option is selected', async
         tradeoffs: ['Adds a mid-trip transfer day.'],
         warning_flags: [],
         price_assumptions: ['Assumes shoulder-season airfare from JFK.'],
+        is_selected: false,
+        created_at: '2026-05-28T07:00:00Z',
       },
     ],
     itineraries: [],
@@ -228,4 +235,167 @@ test('trip detail blocks itinerary tabs until a route option is selected', async
 
   expect(screen.getByText(/Please select a trip option before continuing/i)).toBeInTheDocument()
   expect(screen.getByText(/Open the Options tab, pick the route you want/i)).toBeInTheDocument()
+})
+
+test('trip detail confirms route selection before locking the trip and generating the itinerary', async () => {
+  window.localStorage.setItem(
+    'trip-architect-session',
+    JSON.stringify({
+      token: 'test-token',
+      user: { id: 'user-1', email: 'alex@example.com', full_name: 'Alex Rivera' },
+    }),
+  )
+
+  const user = (await import('@testing-library/user-event')).default.setup()
+
+  const baseTrip = {
+    id: 'trip-3',
+    origin: 'New York',
+    start_date: '2026-08-10',
+    end_date: '2026-08-20',
+    destination_candidates: ['Barcelona', 'Split'],
+    trip_style: 'Fun summer trip with food and water.',
+    budget_range: 'Mid-range',
+    traveler_count: 2,
+    pace_preference: 'Balanced',
+    planning_mode: 'gemini',
+    status: 'planned',
+    selected_option_id: null,
+    flight_selection_locked: false,
+    locked_flight_option_id: null,
+    created_at: '2026-05-28T07:00:00Z',
+    updated_at: '2026-05-28T07:00:00Z',
+    options: [
+      {
+        id: 'opt-1',
+        name: 'Barcelona first',
+        summary: 'Good weather and beach balance.',
+        rationale: 'Front-loads the city days and leaves beach recovery for later.',
+        fit_score: 8.8,
+        days_by_stop: [
+          { city: 'Barcelona', nights: 5 },
+          { city: 'Split', nights: 4 },
+        ],
+        estimated_total_min: 3200,
+        estimated_total_max: 4100,
+        pace_label: 'Balanced',
+        budget_confidence: 'medium',
+        cost_breakdown: {
+          flights: { min: 1200, max: 1500 },
+          lodging: { min: 1300, max: 1800 },
+          local_transport: { min: 200, max: 280 },
+          food_and_activities: { min: 500, max: 700 },
+        },
+        tradeoffs: ['Adds a mid-trip transfer day.'],
+        warning_flags: [],
+        price_assumptions: ['Assumes shoulder-season airfare from JFK.'],
+        is_selected: false,
+        created_at: '2026-05-28T07:00:00Z',
+      },
+      {
+        id: 'opt-2',
+        name: 'Split first',
+        summary: 'More beach time up front.',
+        rationale: 'Starts slower before finishing with bigger city energy.',
+        fit_score: 8.4,
+        days_by_stop: [
+          { city: 'Split', nights: 4 },
+          { city: 'Barcelona', nights: 5 },
+        ],
+        estimated_total_min: 3300,
+        estimated_total_max: 4200,
+        pace_label: 'Balanced',
+        budget_confidence: 'medium',
+        cost_breakdown: {
+          flights: { min: 1220, max: 1520 },
+          lodging: { min: 1320, max: 1820 },
+          local_transport: { min: 210, max: 290 },
+          food_and_activities: { min: 520, max: 710 },
+        },
+        tradeoffs: ['Requires an earlier arrival transfer.'],
+        warning_flags: [],
+        price_assumptions: ['Assumes shoulder-season airfare from JFK.'],
+        is_selected: false,
+        created_at: '2026-05-28T07:00:00Z',
+      },
+    ],
+    itineraries: [],
+    flight_options: [],
+    hotel_options: [],
+    confirmed_bookings: [],
+    agent_runs: [],
+    saved_trip: null,
+  }
+
+  const lockedTrip = {
+    ...baseTrip,
+    status: 'building_itinerary',
+    selected_option_id: 'opt-1',
+    options: baseTrip.options.map((option) => ({
+      ...option,
+      is_selected: option.id === 'opt-1',
+    })),
+  }
+
+  let currentTrip = baseTrip
+  let selectionRequests = 0
+
+  vi.spyOn(global, 'fetch').mockImplementation((input, init = {}) => {
+    const url = String(input)
+    const method = init.method || 'GET'
+    let payload = null
+
+    if (url.endsWith('/api/trips/trip-3') && method === 'GET') {
+      payload = currentTrip
+    } else if (url.endsWith('/api/trips/trip-3/select-option/opt-1') && method === 'POST') {
+      selectionRequests += 1
+      currentTrip = lockedTrip
+      payload = lockedTrip
+    } else if (url.endsWith('/api/trips')) {
+      payload = { recent_trips: [], saved_trips: [] }
+    } else if (url.endsWith('/api/profile/me')) {
+      payload = {
+        id: 'profile-1',
+        home_airport: 'JFK',
+        budget_preference: 'Mid-range',
+        pace_preference: 'Balanced',
+        interests: ['Food'],
+      }
+    } else {
+      return Promise.reject(new Error(`Unexpected request: ${method} ${url}`))
+    }
+
+    return Promise.resolve(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  render(
+    <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }} initialEntries={['/trips/trip-3']}>
+      <App />
+    </MemoryRouter>,
+  )
+
+  const chooseButtons = await screen.findAllByRole('button', { name: /choose this trip/i })
+  await user.click(chooseButtons[0])
+
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
+  expect(screen.getByText(/Once a trip is selected it cannot be changed/i)).toBeInTheDocument()
+  expect(selectionRequests).toBe(0)
+
+  await user.click(screen.getByRole('button', { name: /^Cancel$/i }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(selectionRequests).toBe(0)
+
+  await user.click((await screen.findAllByRole('button', { name: /choose this trip/i }))[0])
+  await user.click(screen.getByRole('button', { name: /^Confirm$/i }))
+
+  expect(await screen.findByText(/This route is locked in and cannot be changed/i)).toBeInTheDocument()
+  expect(selectionRequests).toBe(1)
+  expect(screen.queryByRole('button', { name: /adjust & regenerate/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /locked in plan/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /trip locked/i })).toBeDisabled()
 })

@@ -18,7 +18,7 @@ from app.models import (
     TripRequest,
     User,
 )
-from app.schemas.trip import BookingSelectionRequest, DashboardResponse, SaveTripRequest, TripCreateRequest, TripRead
+from app.schemas.trip import BookingSelectionRequest, DashboardResponse, RegenerateRequest, SaveTripRequest, TripCreateRequest, TripRead
 from app.services.trip_jobs import schedule_itinerary_generation, schedule_trip_options_generation
 
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -50,6 +50,20 @@ def _get_trip_or_404(db: Session, user_id: str, trip_id: str) -> TripRequest:
 
 def _serialize_trip(trip: TripRequest) -> TripRead:
     return TripRead.model_validate(trip)
+
+
+def _raise_flight_lock_error() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="A flight has already been saved for this trip. Flight selection is now permanent, so routes and flight choices can no longer be changed.",
+    )
+
+
+def _raise_trip_lock_error() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="A trip option has already been confirmed for this trip. Once selected, the route cannot be changed or regenerated.",
+    )
 
 
 def _prepare_trip_request(
@@ -146,6 +160,78 @@ def get_trip(
     return _serialize_trip(_get_trip_or_404(db, current_user.id, trip_id))
 
 
+@router.post("/{trip_id}/regenerate", response_model=TripRead, status_code=status.HTTP_202_ACCEPTED)
+def regenerate_trip(
+    trip_id: str,
+    payload: RegenerateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> TripRead:
+    """Wipe existing options + itinerary for a trip and reschedule the planning job.
+
+    An optional feedback string is appended to the trip_style so the planner
+    can take the user's adjustment note into account on the next run.
+    """
+    trip = _get_trip_or_404(db, current_user.id, trip_id)
+    if trip.selected_option_id is not None:
+        _raise_trip_lock_error()
+    if trip.flight_selection_locked:
+        _raise_flight_lock_error()
+
+    # Block regeneration while a run is already in progress
+    running_run = next(
+        (run for run in trip.agent_runs if run.status == "running" and run.kind == "options"),
+        None,
+    )
+    if running_run:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A planning run is already in progress. Please wait for it to finish before regenerating.",
+        )
+
+    # Append feedback to trip_style if provided
+    feedback = payload.feedback.strip()
+    if feedback:
+        separator = " " if not trip.trip_style.endswith(".") else " "
+        trip.trip_style = f"{trip.trip_style}{separator}Regeneration note: {feedback}"
+
+    # Clear options, itineraries, and flight/hotel options so the new run starts clean
+    for option in list(trip.options):
+        db.delete(option)
+    for itinerary in list(trip.itineraries):
+        db.delete(itinerary)
+    for flight in list(trip.flight_options):
+        db.delete(flight)
+    for hotel in list(trip.hotel_options):
+        db.delete(hotel)
+
+    trip.selected_option_id = None
+    trip.status = "planning"
+    trip.planning_mode = "pending"
+
+    agent_run = AgentRun(
+        trip_request_id=trip.id,
+        kind="options",
+        mode="pending",
+        status="running",
+        summary="Regenerating trip options with updated preferences.",
+        input_payload={"feedback": feedback, "trip_style": trip.trip_style},
+        output_payload={"options_count": 0},
+        steps=[
+            {"agent": "intake-agent", "status": "running", "detail": "Re-normalizing traveler constraints with updated feedback."},
+            {"agent": "routing-agent", "status": "pending", "detail": "Waiting to rebuild destination combinations."},
+            {"agent": "planner-agent", "status": "pending", "detail": "Waiting to rank the refreshed options."},
+        ],
+        sources=[],
+    )
+    db.add(agent_run)
+    db.commit()
+
+    response_trip = _get_trip_or_404(db, current_user.id, trip_id)
+    schedule_trip_options_generation(trip.id)
+    return _serialize_trip(response_trip)
+
+
 @router.post("/{trip_id}/select-option/{option_id}", response_model=TripRead)
 def select_trip_option(
     trip_id: str,
@@ -157,6 +243,10 @@ def select_trip_option(
     selected_option = next((option for option in trip.options if option.id == option_id), None)
     if not selected_option:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip option not found.")
+    if trip.selected_option_id is not None and trip.selected_option_id != option_id:
+        _raise_trip_lock_error()
+    if trip.flight_selection_locked and trip.selected_option_id != option_id:
+        _raise_flight_lock_error()
 
     for option in trip.options:
         option.is_selected = option.id == option_id
@@ -272,6 +362,10 @@ def update_booking_selection(
     if option is None or provider is None or label is None or booking_url is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking option not found.")
 
+    if payload.booking_type == "flight" and trip.flight_selection_locked:
+        if trip.locked_flight_option_id != payload.option_id or payload.selection_state == "none":
+            _raise_flight_lock_error()
+
     existing = next(
         (
             booking
@@ -312,6 +406,10 @@ def update_booking_selection(
             existing.label = label
             existing.booking_url = booking_url
             existing.selection_state = payload.selection_state
+
+        if payload.booking_type == "flight" and payload.selection_state in {"saved", "confirmed"}:
+            trip.flight_selection_locked = True
+            trip.locked_flight_option_id = payload.option_id
 
     trip.status = "saved" if trip.saved_trip is not None else trip.status
     _update_confirmed_booking_count(trip)

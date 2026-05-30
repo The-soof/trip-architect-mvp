@@ -5,7 +5,8 @@ Trip Architect is a full-stack travel planning MVP built from the `plan.md` spec
 - Python `FastAPI` backend
 - React + Vite frontend
 - SQLite for local development, PostgreSQL-ready for Railway
-- Deterministic fallback planner plus LangChain `deepagents`, Tavily research, and an OpenAI-compatible DeepSeek endpoint for live agent runs
+- Deterministic fallback planner plus native Gemini structured outputs for trip generation
+- Tavily + Google Places + Gemini layered research for itinerary, stays, and travel discovery
 
 ## Local development
 

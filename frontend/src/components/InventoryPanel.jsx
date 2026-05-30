@@ -7,11 +7,14 @@ export default function InventoryPanel({
   confirmedBookings,
   onUpdateBookingSelection,
   bookingSavingKey,
+  flightSelectionLocked = false,
+  lockedFlightOptionId = null,
   mode = 'all',
 }) {
   const [flightSort, setFlightSort] = useState('price')
   const [hotelSort, setHotelSort] = useState('rating')
-  const [selectionFilter, setSelectionFilter] = useState('all')
+  const [flightSelectionFilter, setFlightSelectionFilter] = useState('all')
+  const [hotelSelectionFilter, setHotelSelectionFilter] = useState('all')
   const showFlights = mode === 'all' || mode === 'flights'
   const showHotels = mode === 'all' || mode === 'hotels'
 
@@ -31,12 +34,12 @@ export default function InventoryPanel({
       next.sort((a, b) => a.price - b.price)
     }
     return next.filter((flight) => {
-      if (selectionFilter === 'all') {
+      if (flightSelectionFilter === 'all') {
         return true
       }
-      return bookingMap[`flight:${flight.id}`] === selectionFilter
+      return bookingMap[`flight:${flight.id}`] === flightSelectionFilter
     })
-  }, [bookingMap, flightSort, flights, selectionFilter])
+  }, [bookingMap, flightSort, flights, flightSelectionFilter])
 
   const visibleHotels = useMemo(() => {
     const next = [...hotels]
@@ -46,12 +49,12 @@ export default function InventoryPanel({
       next.sort((a, b) => b.rating - a.rating)
     }
     return next.filter((hotel) => {
-      if (selectionFilter === 'all') {
+      if (hotelSelectionFilter === 'all') {
         return true
       }
-      return bookingMap[`hotel:${hotel.id}`] === selectionFilter
+      return bookingMap[`hotel:${hotel.id}`] === hotelSelectionFilter
     })
-  }, [bookingMap, hotelSort, hotels, selectionFilter])
+  }, [bookingMap, hotelSort, hotels, hotelSelectionFilter])
 
   return (
     <section className="inventory-grid">
@@ -64,6 +67,11 @@ export default function InventoryPanel({
             </div>
             <p>These are link-out options aligned to the selected route and pacing.</p>
           </div>
+          {flightSelectionLocked ? (
+            <p className="inline-error">
+              A flight has already been saved for this trip. The selected route is now locked and other flight options are read-only.
+            </p>
+          ) : null}
           <div className="toolbar-row">
             <label>
               Sort flights
@@ -74,7 +82,7 @@ export default function InventoryPanel({
             </label>
             <label>
               Selection filter
-              <select onChange={(event) => setSelectionFilter(event.target.value)} value={selectionFilter}>
+              <select onChange={(event) => setFlightSelectionFilter(event.target.value)} value={flightSelectionFilter}>
                 <option value="all">Show all</option>
                 <option value="saved">Saved</option>
                 <option value="confirmed">Confirmed</option>
@@ -85,6 +93,8 @@ export default function InventoryPanel({
             {visibleFlights.length ? (
               visibleFlights.map((flight) => {
                 const selectionState = bookingMap[`flight:${flight.id}`] || 'available'
+                const isLockedFlight = flightSelectionLocked && lockedFlightOptionId === flight.id
+                const restrictFlightActions = flightSelectionLocked && lockedFlightOptionId !== flight.id
                 return (
                   <article className="inventory-card inventory-block" key={flight.id}>
                     <div>
@@ -102,7 +112,7 @@ export default function InventoryPanel({
                     <div className="trip-card-actions">
                       <button
                         className="ghost-button"
-                        disabled={bookingSavingKey === `flight:${flight.id}`}
+                        disabled={bookingSavingKey === `flight:${flight.id}` || flightSelectionLocked}
                         onClick={() => onUpdateBookingSelection('flight', flight.id, 'saved')}
                         type="button"
                       >
@@ -110,7 +120,7 @@ export default function InventoryPanel({
                       </button>
                       <button
                         className="secondary-button"
-                        disabled={bookingSavingKey === `flight:${flight.id}`}
+                        disabled={bookingSavingKey === `flight:${flight.id}` || restrictFlightActions}
                         onClick={() => onUpdateBookingSelection('flight', flight.id, 'confirmed')}
                         type="button"
                       >
@@ -118,7 +128,7 @@ export default function InventoryPanel({
                       </button>
                       <button
                         className="ghost-button"
-                        disabled={bookingSavingKey === `flight:${flight.id}`}
+                        disabled={bookingSavingKey === `flight:${flight.id}` || flightSelectionLocked}
                         onClick={() => onUpdateBookingSelection('flight', flight.id, 'none')}
                         type="button"
                       >
@@ -127,6 +137,7 @@ export default function InventoryPanel({
                       <a href={flight.booking_url} rel="noreferrer" target="_blank">
                         Open booking
                       </a>
+                      {isLockedFlight ? <small className="muted-inline">Locked flight selection</small> : null}
                     </div>
                   </article>
                 )
@@ -145,17 +156,25 @@ export default function InventoryPanel({
         <div className="surface-card">
           <div className="section-header">
             <div>
-              <p className="eyebrow">Hotels</p>
+              <p className="eyebrow">Stays</p>
               <h2>Stay recommendations</h2>
             </div>
             <p>Neighborhood-first options that match the itinerary rhythm.</p>
           </div>
           <div className="toolbar-row">
             <label>
-              Sort hotels
+              Sort stays
               <select onChange={(event) => setHotelSort(event.target.value)} value={hotelSort}>
                 <option value="rating">Highest rating</option>
                 <option value="price">Lowest nightly rate</option>
+              </select>
+            </label>
+            <label>
+              Selection filter
+              <select onChange={(event) => setHotelSelectionFilter(event.target.value)} value={hotelSelectionFilter}>
+                <option value="all">Show all</option>
+                <option value="saved">Saved</option>
+                <option value="confirmed">Confirmed</option>
               </select>
             </label>
           </div>
@@ -215,7 +234,7 @@ export default function InventoryPanel({
               })
             ) : (
               <article className="empty-state-card">
-                <strong>No hotels match the current sort or selection state.</strong>
+                <strong>No stays match the current sort or selection state.</strong>
                 <p>Reset the filter to browse the full list again.</p>
               </article>
             )}

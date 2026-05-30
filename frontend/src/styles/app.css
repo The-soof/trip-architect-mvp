@@ -739,6 +739,31 @@ textarea {
   background: linear-gradient(135deg, rgba(166, 58, 47, 0.08), rgba(255, 255, 255, 0.7));
 }
 
+.planner-mock-notice {
+  border-color: rgba(161, 110, 13, 0.2);
+  background: linear-gradient(135deg, rgba(245, 196, 70, 0.08), rgba(255, 255, 255, 0.7));
+}
+
+.planner-lock-notice {
+  border-color: rgba(18, 48, 82, 0.16);
+  background: linear-gradient(135deg, rgba(18, 48, 82, 0.08), rgba(255, 255, 255, 0.88));
+}
+
+.planner-mock-notice .eyebrow {
+  color: rgba(130, 88, 8, 0.85);
+}
+
+.regenerate-form-card {
+  display: grid;
+  gap: 16px;
+  border-color: rgba(31, 76, 122, 0.18);
+  background: linear-gradient(135deg, rgba(31, 76, 122, 0.05), rgba(255, 255, 255, 0.72));
+}
+
+.regenerate-form-card h2 {
+  margin-top: 6px;
+}
+
 .planner-status-card h2,
 .planner-notice h2 {
   margin: 10px 0;
@@ -798,13 +823,35 @@ textarea {
 .option-card {
   display: grid;
   gap: 16px;
+  position: relative;
 }
 
 .option-card.selected {
-  border-color: rgba(31, 76, 122, 0.24);
+  border-color: rgba(18, 48, 82, 0.22);
+  background: rgba(255, 255, 255, 0.96);
   box-shadow:
     0 22px 42px rgba(17, 24, 39, 0.12),
-    0 0 0 3px rgba(31, 76, 122, 0.08);
+    0 0 0 3px rgba(18, 48, 82, 0.08);
+}
+
+.option-card.locked::after {
+  content: 'Locked route';
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: rgba(18, 48, 82, 0.1);
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.option-card.muted {
+  opacity: 0.5;
+  filter: saturate(0.7);
 }
 
 .option-header {
@@ -881,6 +928,37 @@ textarea {
 
 .timeline-list {
   margin-top: 22px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(7, 18, 38, 0.42);
+  backdrop-filter: blur(10px);
+}
+
+.modal-card {
+  width: min(540px, 100%);
+  display: grid;
+  gap: 16px;
+  border-color: rgba(18, 48, 82, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 34px 90px rgba(7, 18, 38, 0.22);
+}
+
+.modal-card h2 {
+  font-size: 2rem;
+  line-height: 1.02;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
 }
 
 .timeline-day {

@@ -110,6 +110,11 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
     return () => window.clearInterval(intervalId)
   }, [hasPendingTrips, reloadDashboard])
 
+  useEffect(() => {
+    reloadDashboard().catch(() => {})
+  }, [reloadDashboard])
+
+
   return (
     <AppShell
       title="Plan the trip. Keep the details together."

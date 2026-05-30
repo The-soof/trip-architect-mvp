@@ -6,11 +6,6 @@ import json
 from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-HARDCODED_LLM_MODEL = "deepseek-v4-azure"
-HARDCODED_OPENAI_API_KEY = "sk-tJH9LJV6WJbo5yge7X7HFA"
-HARDCODED_OPENAI_BASE_URL = "https://muon-lite.up.railway.app/"
-HARDCODED_TAVILY_API_KEY = "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"
-
 
 class Settings(BaseSettings):
     app_name: str = "Trip Architect"
@@ -26,10 +21,10 @@ class Settings(BaseSettings):
     # until we intentionally raise the cap again.
     fast_mvp_mode: bool = True
     fast_mvp_search_limit: int = 3
-    llm_model: str | None = HARDCODED_LLM_MODEL
-    openai_api_key: str | None = HARDCODED_OPENAI_API_KEY
-    openai_base_url: str | None = HARDCODED_OPENAI_BASE_URL
-    tavily_api_key: str | None = HARDCODED_TAVILY_API_KEY
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_api_key: str | None = None
+    google_places_api_key: str | None = None
+    tavily_api_key: str | None = None
     default_trip_strategy: Literal["balance", "cheapest", "experience"] = "balance"
 
     model_config = SettingsConfigDict(
@@ -55,14 +50,6 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
-
-    def model_post_init(self, __context: object) -> None:
-        if self.app_env == "test":
-            return
-        self.llm_model = HARDCODED_LLM_MODEL
-        self.openai_api_key = HARDCODED_OPENAI_API_KEY
-        self.openai_base_url = HARDCODED_OPENAI_BASE_URL
-        self.tavily_api_key = HARDCODED_TAVILY_API_KEY
 
 
 @lru_cache

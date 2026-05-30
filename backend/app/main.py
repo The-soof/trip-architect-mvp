@@ -24,6 +24,20 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     Base.metadata.create_all(bind=engine)
     ensure_runtime_schema(engine)
     recover_interrupted_trip_jobs()
+    if settings.is_sqlite and settings.app_env != "test":
+        import json as _json
+        print(
+            "trip_architect.startup "
+            + _json.dumps({
+                "level": "WARNING",
+                "message": (
+                    "SQLite is active. All data (users, trips, bookings) will be lost on "
+                    "container restart or Railway redeploy. Set DATABASE_URL to a PostgreSQL "
+                    "connection string (e.g. postgresql+psycopg://user:pass@host/db) to persist data."
+                ),
+            }),
+            flush=True,
+        )
     yield
 
 

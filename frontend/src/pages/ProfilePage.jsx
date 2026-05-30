@@ -31,6 +31,10 @@ export default function ProfilePage({ loadingWorkspace, profile, reloadProfile }
     })
   }, [profile])
 
+  useEffect(() => {
+    reloadProfile().catch(() => {})
+  }, [reloadProfile])
+
   async function handleSubmit(event) {
     event.preventDefault()
     setSaving(true)
@@ -91,9 +95,9 @@ export default function ProfilePage({ loadingWorkspace, profile, reloadProfile }
               onChange={(event) => setForm((current) => ({ ...current, budget_preference: event.target.value }))}
               value={form.budget_preference}
             >
-              <option>Budget</option>
-              <option>Mid-range</option>
-              <option>Luxury</option>
+              <option value="Budget">Budget</option>
+              <option value="Mid-range">Mid-range</option>
+              <option value="Luxury">Luxury</option>
             </select>
           </label>
 
@@ -104,11 +108,12 @@ export default function ProfilePage({ loadingWorkspace, profile, reloadProfile }
               onChange={(event) => setForm((current) => ({ ...current, pace_preference: event.target.value }))}
               value={form.pace_preference}
             >
-              <option>Slow</option>
-              <option>Balanced</option>
-              <option>Fast-paced</option>
+              <option value="Slow">Slow</option>
+              <option value="Balanced">Balanced</option>
+              <option value="Fast-paced">Fast-paced</option>
             </select>
           </label>
+
 
           <label>
             Interests

@@ -58,6 +58,8 @@ class TripRequest(Base):
     planning_mode: Mapped[str] = mapped_column(String(32), default="mock")
     status: Mapped[str] = mapped_column(String(32), default="draft")
     selected_option_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    flight_selection_locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    locked_flight_option_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -179,7 +181,7 @@ class FlightOption(Base):
     price: Mapped[int] = mapped_column(Integer)
     stops: Mapped[int] = mapped_column(Integer, default=1)
     comfort_label: Mapped[str] = mapped_column(String(40))
-    source_name: Mapped[str] = mapped_column(String(60), default="Google Flights")
+    source_name: Mapped[str] = mapped_column(String(60), default="Kayak")
     booking_url: Mapped[str] = mapped_column(Text())
     match_reason: Mapped[str] = mapped_column(Text(), default="")
 
@@ -201,6 +203,10 @@ class HotelOption(Base):
     source_name: Mapped[str] = mapped_column(String(60), default="Booking.com")
     booking_url: Mapped[str] = mapped_column(Text())
     match_reason: Mapped[str] = mapped_column(Text(), default="")
+    address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    maps_url: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
     trip_request: Mapped[TripRequest] = relationship(back_populates="hotel_options")
 

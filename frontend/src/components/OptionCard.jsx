@@ -1,8 +1,16 @@
 import { formatMoney } from '../lib/format'
 
-export default function OptionCard({ option, onSelect, active, selecting }) {
+export default function OptionCard({
+  option,
+  onSelect,
+  active,
+  selecting,
+  selectionDisabled = false,
+  selectionLabel = '',
+  selectionLocked = false,
+}) {
   return (
-    <article className={`option-card surface-card ${active ? 'selected' : ''}`}>
+    <article className={`option-card surface-card ${active ? 'selected' : ''} ${selectionDisabled ? 'muted' : ''} ${selectionLocked ? 'locked' : ''}`}>
       <div className="option-header">
         <div>
           <p className="eyebrow">Option</p>
@@ -78,8 +86,21 @@ export default function OptionCard({ option, onSelect, active, selecting }) {
         ))}
       </div>
 
-      <button className="secondary-button" disabled={selecting} onClick={() => onSelect(option.id)} type="button">
-        {active ? 'Selected plan' : selecting ? 'Building itinerary...' : 'Explore this plan'}
+      <button
+        className="secondary-button"
+        disabled={selecting || selectionDisabled}
+        onClick={() => onSelect(option.id)}
+        type="button"
+      >
+        {active && selectionLocked
+          ? 'Locked in plan'
+          : active
+            ? 'Selected plan'
+            : selecting
+              ? 'Locking trip...'
+              : selectionDisabled
+                ? selectionLabel || 'Locked'
+                : 'Choose this trip'}
       </button>
     </article>
   )

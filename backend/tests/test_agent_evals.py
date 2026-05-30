@@ -43,9 +43,9 @@ def option_quality_score(payload: TripCreateRequest, artifacts: PlanningArtifact
     trip_days = (payload.end_date - payload.start_date).days
 
     checks: list[bool] = [
-        artifacts.mode in {"mock", "deepagents"},
+        artifacts.mode in {"mock", "gemini"},
         bool(artifacts.planning_summary),
-        1 <= len(artifacts.options) <= 5,
+        1 <= len(artifacts.options) <= 6,
         bool(artifacts.steps),
         bool(artifacts.sources),
     ]
@@ -177,20 +177,16 @@ def test_agent_eval_itinerary_and_inventory_quality() -> None:
     assert_score("itinerary and booking discovery eval", score, possible)
 
 
-def test_deepagent_simple_flow_prompt_discourages_unbounded_subtasks(monkeypatch) -> None:
+def test_gemini_option_generation_normalizes_structured_output(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 
-    def fake_create_deep_agent(**kwargs):
-        captured["agent_kwargs"] = kwargs
-        return object()
-
-    def fake_run_deepagent(agent, payload, flow, max_steps=24):
-        captured["payload"] = payload
-        captured["flow"] = flow
-        captured["max_steps"] = max_steps
-        return {
-            "structured_response": {
-                "planning_summary": "Compact researched Barcelona shortlist.",
+    def fake_generate_structured(settings, prompt, schema, temperature=0.2):
+        captured["prompt"] = prompt
+        captured["schema"] = schema
+        captured["temperature"] = temperature
+        return schema.model_validate(
+            {
+                "planning_summary": "Compact Barcelona shortlist.",
                 "options": [
                     {
                         "name": "Old City Food Base",
@@ -200,21 +196,14 @@ def test_deepagent_simple_flow_prompt_discourages_unbounded_subtasks(monkeypatch
                         "destination_order": ["Barcelona"],
                         "days_by_stop": [{"city": "Barcelona", "nights": 10, "start_day": 1, "end_day": 10}],
                         "pace_label": "Relaxed",
-                        "estimated_total_min": 2600,
-                        "estimated_total_max": 3900,
                         "budget_confidence": "medium",
                         "fit_score": 9.2,
                     }
                 ],
-                "sources": [{"title": "Barcelona food guide", "url": "https://example.com/barcelona", "category": "food"}],
-            },
-            "messages": [],
-        }
+            }
+        )
 
-    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
-    monkeypatch.setattr(agent_planner, "_build_tavily_tool", lambda settings: object())
-    monkeypatch.setattr(agent_planner, "_build_chat_model", lambda settings: object())
-    monkeypatch.setattr(agent_planner, "_run_deepagent_with_observability", fake_run_deepagent)
+    monkeypatch.setattr(agent_planner, "_generate_structured_with_gemini", fake_generate_structured)
 
     payload = make_trip_request(
         origin="SFO",
@@ -226,20 +215,14 @@ def test_deepagent_simple_flow_prompt_discourages_unbounded_subtasks(monkeypatch
         Settings(
             app_env="test",
             enable_real_agent=True,
-            openai_api_key="test-key",
-            openai_base_url="https://example.com/v1",
-            tavily_api_key="test-tavily",
+            gemini_api_key="test-key",
         )
     ).generate_trip_options(payload)
 
-    system_prompt = captured["agent_kwargs"]["system_prompt"].lower()
-    user_prompt = captured["payload"]["messages"][0]["content"].lower()
-    assert "default Deep Agents harness tools" not in system_prompt
-    assert "do not delegate to the built-in task tool" in system_prompt
-    assert "internet_search directly" in system_prompt
-    assert "do not exceed six tool calls" in user_prompt
-    assert captured["max_steps"] == 24
-    assert artifacts.mode == "deepagents"
+    user_prompt = captured["prompt"].lower()
+    assert "return only valid json" in user_prompt
+    assert "candidate destinations: barcelona" in user_prompt
+    assert artifacts.mode == "gemini"
     assert artifacts.options[0]["days_by_stop"][0]["end_day"] == 10
+    assert artifacts.options[0]["estimated_total_max"] >= artifacts.options[0]["estimated_total_min"]
     assert artifacts.sources[0]["evidence_type"] == "researched_fact"
-
