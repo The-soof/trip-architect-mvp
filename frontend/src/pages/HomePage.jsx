@@ -96,7 +96,6 @@ export default function HomePage() {
         <nav className="home-nav-actions">
           {signedIn ? (
             <div className="user-card">
-              <p className="eyebrow">Traveler workspace</p>
               <strong>{user?.full_name || 'Traveler'}</strong>
               {user?.email ? <span>{user.email}</span> : null}
             </div>
