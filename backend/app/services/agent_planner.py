@@ -414,6 +414,7 @@ def _generate_structured_with_gemini(
             "temperature": temperature,
             "response_mime_type": "application/json",
             "response_schema": schema,
+            "max_output_tokens": 16384,
         },
     )
     return schema.model_validate_json(_message_text_from_response(response))
