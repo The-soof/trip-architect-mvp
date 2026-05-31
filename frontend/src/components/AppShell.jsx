@@ -19,6 +19,9 @@ export default function AppShell({ title, subtitle, actions, children }) {
             </span>
           </NavLink>
           <nav className="shell-nav">
+            <NavLink className={({ isActive }) => (isActive ? 'active' : '')} end to="/">
+              Home
+            </NavLink>
             <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/app">
               Workspace
             </NavLink>

@@ -3,6 +3,7 @@ import { startTransition, useEffect, useState } from 'react'
 import { apiRequest } from './api/client'
 import { SessionProvider, useSession } from './hooks/useSession.jsx'
 import DashboardPage from './pages/DashboardPage'
+import HomePage from './pages/HomePage'
 import LandingPage from './pages/LandingPage'
 import LegalPage from './pages/LegalPage'
 import ProfilePage from './pages/ProfilePage'
@@ -94,7 +95,7 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage initialMode="register" />} />
+      <Route path="/" element={<HomePage />} />
       <Route path="/sign-in" element={<LandingPage initialMode="login" />} />
       <Route path="/sign-up" element={<LandingPage initialMode="register" />} />
       <Route path="/privacy" element={<LegalPage type="privacy" />} />
