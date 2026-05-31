@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 import AppShell from '../components/AppShell'
+import GlobeLoader from '../components/GlobeLoader'
 import IntakeForm from '../components/IntakeForm'
 import { useSession } from '../hooks/useSession.jsx'
 import { tripWindow } from '../lib/format'
@@ -158,30 +159,7 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
             </section>
           ) : null}
 
-          {submitting ? (
-            <section className="surface-card planner-status-card" aria-live="polite">
-              <p className="eyebrow">Planning run in progress</p>
-              <h2>Creating your trip workspace and queueing the planner.</h2>
-              <p>
-                Trip Architect is saving your brief first, then it will generate structured route options in the
-                background so you can follow the job from the trip workspace.
-              </p>
-              <div className="status-step-list">
-                <div className="status-step">
-                  <strong>1. Workspace</strong>
-                  <span>Persisting the trip request and traveler defaults.</span>
-                </div>
-                <div className="status-step">
-                  <strong>2. Planning agents</strong>
-                  <span>Queueing routing, research, and budget generation in the background.</span>
-                </div>
-                <div className="status-step">
-                  <strong>3. Trip workspace</strong>
-                  <span>You’ll land on the trip page as soon as the workspace is ready.</span>
-                </div>
-              </div>
-            </section>
-          ) : null}
+          {submitting ? <GlobeLoader fullscreen /> : null}
           <IntakeForm
             initialValues={intakeDefaults}
             onClearPreset={() => setPrefillTrip(null)}
