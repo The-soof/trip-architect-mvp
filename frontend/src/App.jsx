@@ -103,14 +103,12 @@ function AppRoutes() {
       <Route
         path="/app"
         element={
-          <ProtectedRoute>
-            <DashboardPage
-              dashboard={dashboard}
-              loadingWorkspace={loadingWorkspace}
-              profile={profile}
-              reloadDashboard={reloadDashboard}
-            />
-          </ProtectedRoute>
+          <DashboardPage
+            dashboard={dashboard}
+            loadingWorkspace={loadingWorkspace}
+            profile={profile}
+            reloadDashboard={reloadDashboard}
+          />
         }
       />
       <Route

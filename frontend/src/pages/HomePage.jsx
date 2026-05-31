@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import ReactiveBackground from '../components/ReactiveBackground'
 import { useSession } from '../hooks/useSession.jsx'
 
@@ -71,7 +71,8 @@ const workflow = [
 ]
 
 export default function HomePage() {
-  const { token } = useSession()
+  const { token, user } = useSession()
+  const signedIn = Boolean(token)
 
   // Suppress the global page-background overlay so the reactive canvas reads as
   // the sole backdrop while the home page is mounted.
@@ -79,11 +80,6 @@ export default function HomePage() {
     document.body.classList.add('home-active')
     return () => document.body.classList.remove('home-active')
   }, [])
-
-  // Signed-in travelers go straight to their workspace.
-  if (token) {
-    return <Navigate replace to="/app" />
-  }
 
   return (
     <div className="home-page">
@@ -98,10 +94,17 @@ export default function HomePage() {
           </span>
         </Link>
         <nav className="home-nav-actions">
-          <Link className="ghost-button" to="/sign-in">
-            Sign in
-          </Link>
-          <Link className="primary-button" to="/sign-up">
+          {signedIn ? (
+            <Link className="home-account" to="/app">
+              <span className="home-account-name">{user?.full_name || 'Traveler'}</span>
+              {user?.email ? <span className="home-account-email">{user.email}</span> : null}
+            </Link>
+          ) : (
+            <Link className="ghost-button" to="/sign-in">
+              Sign in
+            </Link>
+          )}
+          <Link className="primary-button" to="/app">
             Get started
           </Link>
         </nav>
@@ -111,14 +114,6 @@ export default function HomePage() {
         <CompassLogo />
         <h1 className="home-wordmark">Trip Architect</h1>
         <p className="home-tagline">Design the trip before you book it.</p>
-        <div className="home-hero-actions">
-          <Link className="primary-button home-hero-cta" to="/sign-up">
-            Start planning
-          </Link>
-          <Link className="ghost-button home-hero-cta" to="/sign-in">
-            I already have an account
-          </Link>
-        </div>
         <a className="home-scroll-cue" href="#learn-more" aria-label="Scroll to learn more">
           <span>Scroll to explore</span>
           <span className="home-scroll-arrow" aria-hidden="true">
@@ -173,15 +168,17 @@ export default function HomePage() {
         <section className="home-section home-cta surface-card">
           <p className="eyebrow">Ready when you are</p>
           <h2>Plan your next trip with a clear head.</h2>
-          <p>Create a free workspace and turn your next idea into a structured, bookable plan.</p>
-          <div className="home-hero-actions">
-            <Link className="primary-button home-hero-cta" to="/sign-up">
-              Get started
-            </Link>
-            <Link className="ghost-button home-hero-cta" to="/sign-in">
-              Sign in
-            </Link>
-          </div>
+          <p>Open the workspace and turn your next idea into a structured, bookable plan.</p>
+          {signedIn ? null : (
+            <div className="home-hero-actions">
+              <Link className="primary-button home-hero-cta" to="/app">
+                Get started
+              </Link>
+              <Link className="ghost-button home-hero-cta" to="/sign-in">
+                Sign in
+              </Link>
+            </div>
+          )}
         </section>
 
         <footer className="home-footer">
