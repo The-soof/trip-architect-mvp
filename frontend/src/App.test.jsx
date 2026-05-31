@@ -11,9 +11,20 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('renders landing page hero for signed out users', () => {
+test('renders home page hero for signed out users', () => {
   render(
     <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+      <App />
+    </MemoryRouter>,
+  )
+
+  expect(screen.getByRole('heading', { level: 1, name: /trip architect/i })).toBeInTheDocument()
+  expect(screen.getByText(/design the trip before you book it/i)).toBeInTheDocument()
+})
+
+test('renders landing page hero for signed out users', () => {
+  render(
+    <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }} initialEntries={['/sign-up']}>
       <App />
     </MemoryRouter>,
   )
@@ -26,7 +37,7 @@ test('auth panel switches to sign in mode', async () => {
   const user = (await import('@testing-library/user-event')).default.setup()
 
   render(
-    <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+    <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }} initialEntries={['/sign-up']}>
       <App />
     </MemoryRouter>,
   )
