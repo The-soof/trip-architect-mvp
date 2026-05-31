@@ -1398,10 +1398,6 @@ body.home-active::before {
   .home-hero-actions .primary-button {
     width: auto;
   }
-
-  .home-nav-actions .ghost-button {
-    display: none;
-  }
 }
 
 @media (max-width: 1100px) {
