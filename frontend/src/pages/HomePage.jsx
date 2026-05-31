@@ -95,10 +95,11 @@ export default function HomePage() {
         </Link>
         <nav className="home-nav-actions">
           {signedIn ? (
-            <Link className="home-account" to="/app">
-              <span className="home-account-name">{user?.full_name || 'Traveler'}</span>
-              {user?.email ? <span className="home-account-email">{user.email}</span> : null}
-            </Link>
+            <div className="user-card">
+              <p className="eyebrow">Traveler workspace</p>
+              <strong>{user?.full_name || 'Traveler'}</strong>
+              {user?.email ? <span>{user.email}</span> : null}
+            </div>
           ) : (
             <Link className="ghost-button" to="/sign-in">
               Sign in
