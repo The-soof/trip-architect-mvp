@@ -1311,3 +1311,35 @@ textarea {
     width: 100%;
   }
 }
+
+/* ----- Globe loading screen (Globe Loader design) ----- */
+.globe-loader {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 360px;
+  padding: 32px;
+  background:
+    radial-gradient(circle at 38% 28%, rgba(106, 184, 244, 0.3), transparent 22rem),
+    radial-gradient(circle at 72% 40%, rgba(246, 199, 156, 0.26), transparent 20rem),
+    radial-gradient(circle at 55% 74%, rgba(171, 177, 226, 0.26), transparent 22rem),
+    linear-gradient(180deg, #ffffff 0%, #fbfbfd 54%, #f2f5f8 100%);
+}
+
+.globe-loader-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  min-height: 100vh;
+}
+
+.globe-loader-stage {
+  width: 320px;
+  height: 320px;
+}
+
+.globe-loader-stage canvas {
+  display: block;
+  width: 320px;
+  height: 320px;
+}

@@ -129,8 +129,7 @@ test('trip detail shows background planning state while options are still genera
     </MemoryRouter>,
   )
 
-  expect(await screen.findByText(/Please wait, suggestions are being generated/i)).toBeInTheDocument()
-  expect(screen.getByText(/This page refreshes automatically while the options run finishes/i)).toBeInTheDocument()
+  expect(await screen.findByRole('img', { name: /loading/i })).toBeInTheDocument()
 })
 
 test('trip detail blocks itinerary tabs until a route option is selected', async () => {

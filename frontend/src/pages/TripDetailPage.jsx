@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 import AppShell from '../components/AppShell'
+import GlobeLoader from '../components/GlobeLoader'
 import InventoryPanel from '../components/InventoryPanel'
 import OptionCard from '../components/OptionCard'
 import Timeline from '../components/Timeline'
@@ -70,6 +71,8 @@ export default function TripDetailPage() {
   const isPending = isPlanningOptions || isBuildingItinerary
   const showPlanningScreen = isPlanningOptions && !trip?.options.length
   const requiresSelectedOption = activeTab !== 'Options'
+  // Itinerary, stays, and travel are generated after an option is committed.
+  const isGeneratingDetail = isBuildingItinerary || Boolean(selectingOptionId)
 
   useEffect(() => {
     if (!isPending) {
@@ -188,41 +191,7 @@ export default function TripDetailPage() {
   }
 
   if (showPlanningScreen) {
-    return (
-      <AppShell
-        title={trip.destination_candidates.join(' · ')}
-        subtitle={`${trip.origin} · ${tripWindow(trip.start_date, trip.end_date)} · ${trip.status}`}
-        actions={
-          <button className="primary-button" disabled={saving} onClick={handleSave} type="button">
-            {trip.saved_trip ? 'Saved to dashboard' : saving ? 'Saving...' : 'Save trip'}
-          </button>
-        }
-      >
-        {error ? <p className="inline-error">{error}</p> : null}
-        <section className="surface-card planner-wait-card" aria-live="polite">
-          <p className="eyebrow">Planning run in progress</p>
-          <h2>Please wait, suggestions are being generated.</h2>
-          <p>
-            Trip Architect is comparing routes, rough budgets, and tradeoffs now. This page refreshes automatically
-            while the options run finishes.
-          </p>
-          <div className="status-step-list">
-            <div className="status-step">
-              <strong>1. Intake agent</strong>
-              <span>Normalizing dates, origin, traveler count, and trip intent.</span>
-            </div>
-            <div className="status-step">
-              <strong>2. Routing + research agents</strong>
-              <span>Evaluating feasible stop combinations and destination fit.</span>
-            </div>
-            <div className="status-step">
-              <strong>3. Budget + planner agents</strong>
-              <span>Ranking the strongest trip options for this brief.</span>
-            </div>
-          </div>
-        </section>
-      </AppShell>
-    )
+    return <GlobeLoader fullscreen />
   }
 
   return (
@@ -363,31 +332,10 @@ export default function TripDetailPage() {
         ))}
       </div>
 
-      {isBuildingItinerary || selectingOptionId ? (
-        <section className="surface-card planner-status-card" aria-live="polite">
-          <p className="eyebrow">Detailed planning in progress</p>
-          <h2>Expanding the selected route into a day-by-day trip workspace.</h2>
-          <p>
-            Trip Architect is building itinerary structure, neighborhood guidance, and booking discovery for the
-            selected option.
-          </p>
-          <div className="status-step-list">
-            <div className="status-step">
-              <strong>1. Research agent</strong>
-              <span>Checking destination fit, seasonality, and logistics context.</span>
-            </div>
-            <div className="status-step">
-              <strong>2. Itinerary agent</strong>
-              <span>Drafting daily morning, afternoon, and evening suggestions.</span>
-            </div>
-            <div className="status-step">
-              <strong>3. Booking discovery agent</strong>
-              <span>Preparing flight and stay options that match the chosen route.</span>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
+      {isGeneratingDetail && activeTab !== 'Options' ? (
+        <GlobeLoader />
+      ) : (
+        <>
       {requiresSelectedOption && !selectedOption ? (
         <section className="surface-card planner-notice">
           <p className="eyebrow">{activeTab}</p>
@@ -491,6 +439,8 @@ export default function TripDetailPage() {
           ))}
         </div>
       </section>
+        </>
+      )}
 
       {pendingSelectionOptionId ? (
         <div className="modal-backdrop" role="presentation">
