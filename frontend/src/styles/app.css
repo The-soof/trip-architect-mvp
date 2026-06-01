@@ -1269,6 +1269,104 @@ body.auth-active::before {
   }
 }
 
+/* ---------- Profile / travel defaults ---------- */
+
+/* Tool-appropriate, smaller page header (opt-in via AppShell compactHeader). */
+/* Compound selectors (both classes on one element) raise specificity above the
+   later breakpoint rules for .app-shell .page-intro h1, so the compact size
+   holds at every width. */
+.app-shell .page-intro.page-intro-compact {
+  padding: 24px 0 6px;
+  margin-bottom: 22px;
+}
+
+.app-shell .page-intro.page-intro-compact h1 {
+  font-size: clamp(1.85rem, 3.4vw, 2.3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+}
+
+.app-shell .page-intro.page-intro-compact .page-intro-copy p:last-child {
+  font-size: 1rem;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.profile-aside {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+/* Interests is a free-text list — give it the full row. */
+.profile-form .form-field-wide {
+  grid-column: 1 / -1;
+}
+
+/* A save action sized to its label, not a full-bleed slab. */
+.profile-form .profile-save {
+  width: auto;
+  justify-self: start;
+  min-width: 220px;
+}
+
+.profile-help-card strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.profile-inherit-card .eyebrow {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.profile-inherit-list {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 0;
+}
+
+.profile-inherit-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-inherit-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.profile-inherit-row dt {
+  color: var(--muted);
+}
+
+.profile-inherit-row dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-form .profile-save {
+    width: 100%;
+    justify-self: stretch;
+  }
+}
+
 /* ---------- Home / docking page ---------- */
 
 .reactive-bg {

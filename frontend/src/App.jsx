@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { startTransition, useEffect, useState } from 'react'
+import { startTransition, useCallback, useEffect, useState } from 'react'
 import { apiRequest } from './api/client'
 import { SessionProvider, useSession } from './hooks/useSession.jsx'
 import DashboardPage from './pages/DashboardPage'
@@ -25,7 +25,10 @@ function AppRoutes() {
   const [profile, setProfile] = useState(null)
   const [loadingWorkspace, setLoadingWorkspace] = useState(false)
 
-  async function reloadDashboard() {
+  // Stable identities (keyed on token) so pages can safely use these as effect
+  // dependencies. Without useCallback they were re-created every render, which
+  // turned the dependent effects into an unbounded fetch/render loop.
+  const reloadDashboard = useCallback(async () => {
     if (!token) {
       setDashboard(EMPTY_DASHBOARD)
       return
@@ -34,9 +37,9 @@ function AppRoutes() {
     startTransition(() => {
       setDashboard(payload)
     })
-  }
+  }, [token])
 
-  async function reloadProfile() {
+  const reloadProfile = useCallback(async () => {
     if (!token) {
       setProfile(null)
       return
@@ -45,7 +48,7 @@ function AppRoutes() {
     startTransition(() => {
       setProfile(payload)
     })
-  }
+  }, [token])
 
   useEffect(() => {
     let ignore = false

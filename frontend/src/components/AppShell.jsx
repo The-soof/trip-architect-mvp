@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useSession } from '../hooks/useSession.jsx'
 
-export default function AppShell({ title, subtitle, actions, children }) {
+export default function AppShell({ title, subtitle, actions, children, compactHeader = false }) {
   const { user, clearSession } = useSession()
 
   return (
@@ -40,7 +40,9 @@ export default function AppShell({ title, subtitle, actions, children }) {
       </header>
 
       <main id="main-content">
-        <section className={`page-intro surface-card${actions ? ' has-actions' : ''}`}>
+        <section
+          className={`page-intro surface-card${actions ? ' has-actions' : ''}${compactHeader ? ' page-intro-compact' : ''}`}
+        >
           <div className="page-intro-copy">
             <p className="eyebrow">Trip workspace</p>
             <h1>{title}</h1>
