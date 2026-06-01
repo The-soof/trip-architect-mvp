@@ -1595,14 +1595,14 @@ body.home-active::before {
   justify-content: center;
   gap: 18px;
   width: 100%;
-  min-height: 400px;
-  padding: 32px;
+  min-height: 520px;
+  padding: 48px 32px;
 }
 
-/* Inline: a soft halo behind the globe, painted on its own layer so it can be
-   faded to transparent on all four edges without touching the globe or text.
-   The radial gradients dissolve the left/right edges; the vertical mask
-   dissolves the top/bottom edges, so the whole block blends into the page. */
+/* Inline: a soft colored glow behind the globe, painted on its own layer and
+   given a real Gaussian blur. The blur removes any gradient banding/rings, and
+   the glows are sized to fade well inside this taller box, so every edge melts
+   into the page background with no hard border and no synthetic mask. */
 .globe-loader:not(.globe-loader-fullscreen)::before {
   content: '';
   position: absolute;
@@ -1610,11 +1610,10 @@ body.home-active::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 52%, rgba(106, 184, 244, 0.2), transparent 56%),
-    radial-gradient(circle at 61% 62%, rgba(246, 199, 156, 0.15), transparent 60%),
-    radial-gradient(circle at 41% 64%, rgba(171, 177, 226, 0.17), transparent 62%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 26%, #000 74%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 26%, #000 74%, transparent 100%);
+    radial-gradient(ellipse 460px 320px at 48% 55%, rgba(106, 184, 244, 0.22), transparent 70%),
+    radial-gradient(ellipse 380px 300px at 60% 60%, rgba(246, 199, 156, 0.16), transparent 72%),
+    radial-gradient(ellipse 400px 300px at 44% 60%, rgba(171, 177, 226, 0.18), transparent 72%);
+  filter: blur(50px);
 }
 
 .globe-loader-fullscreen {
