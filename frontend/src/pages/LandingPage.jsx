@@ -1,101 +1,71 @@
+import { useEffect } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import AuthPanel from '../components/AuthPanel'
 import { useSession } from '../hooks/useSession.jsx'
 
-const valueProps = [
-  {
-    title: 'Shortlist routes quickly',
-    body: 'Compare realistic destination combinations with costs, pacing, and tradeoffs already organized.',
-  },
-  {
-    title: 'Turn a route into a real trip',
-    body: 'Expand the winning option into a day-by-day plan with neighborhood guidance and booking discovery.',
-  },
-  {
-    title: 'Keep planning context together',
-    body: 'Save trips, revisit previous requests, and reuse the best ones as the next starting point.',
-  },
-]
-
-const workflow = [
-  'Share origin, dates, traveler count, destinations, and pace.',
-  'Review ranked route options with budget ranges and fit scores.',
-  'Save the best plan and continue refining details in the workspace.',
-]
+// Compact compass mark, shared visual language with the home page brandmark.
+function CompassMark() {
+  return (
+    <svg className="auth-brand-logo" viewBox="0 0 120 120" role="img" aria-label="Trip Architect">
+      <defs>
+        <linearGradient id="auth-logo-grad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#6bb8f5" />
+          <stop offset="50%" stopColor="#abb1e2" />
+          <stop offset="100%" stopColor="#f6c79c" />
+        </linearGradient>
+      </defs>
+      <circle cx="60" cy="60" r="54" fill="none" stroke="url(#auth-logo-grad)" strokeWidth="2.5" opacity="0.7" />
+      <path d="M60 14 L68 52 L106 60 L68 68 L60 106 L52 68 L14 60 L52 52 Z" fill="url(#auth-logo-grad)" opacity="0.92" />
+      <path d="M60 30 L64 56 L90 60 L64 64 L60 90 L56 64 L30 60 L56 56 Z" fill="#071226" opacity="0.82" />
+      <circle cx="60" cy="60" r="6" fill="#ffffff" />
+      <circle cx="60" cy="60" r="3" fill="#071226" />
+    </svg>
+  )
+}
 
 export default function LandingPage({ initialMode = 'register' }) {
   const { token } = useSession()
+
+  // Suppress the global blurred page overlay so the split panels read crisply.
+  useEffect(() => {
+    document.body.classList.add('auth-active')
+    return () => document.body.classList.remove('auth-active')
+  }, [])
 
   if (token) {
     return <Navigate replace to="/app" />
   }
 
   return (
-    <main className="landing-shell">
-      <header className="landing-header">
-        <Link className="brandmark" to="/">
+    <main className="auth-shell">
+      <section className="auth-brand-panel">
+        <Link className="brandmark auth-brand-mark" to="/">
           <span className="brandmark-dot" />
           <span>
             Trip Architect
             <small>Travel planning workspace</small>
           </span>
         </Link>
-        <div className="landing-header-note">
-          <p>For travelers who want structure before they start booking.</p>
-        </div>
-      </header>
 
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">AI travel planner</p>
-          <h1>From a vague summer idea to a saved bookable itinerary in minutes.</h1>
-          <p className="hero-body">
-            Trip Architect compares realistic destination combinations, explains the tradeoffs, expands a selected plan
-            into a day-by-day itinerary, and keeps the planning decisions in one organized workspace.
+        <div className="auth-brand-hero">
+          <CompassMark />
+          <h1 className="auth-brand-headline">Design the trip before you book it.</h1>
+          <p className="auth-brand-sub">
+            Compare routes, deepen the winning plan, and keep every decision in one workspace.
           </p>
-          <div className="hero-proof">
-            <strong>Built for the messy middle of planning.</strong>
-            <p>Useful before flights are booked, useful after the route is chosen, and still useful when it is time to save the details.</p>
-          </div>
-          <div className="hero-metrics">
-            <article>
-              <strong>3-5</strong>
-              <span>structured route options</span>
-            </article>
-            <article>
-              <strong>1</strong>
-              <span>saved workspace for every trip</span>
-            </article>
-            <article>
-              <strong>2</strong>
-              <span>planning modes ready for fast Gemini routing or deeper research-backed itinerary runs</span>
-            </article>
-          </div>
         </div>
 
-        <div className="hero-stack">
-          <div className="hero-preview surface-card">
-            <p className="eyebrow">How it works</p>
-            <h2>Compare, choose, deepen, save.</h2>
-            <ol className="workflow-list">
-              {workflow.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ol>
-          </div>
-
-          <AuthPanel initialMode={initialMode} />
+        <div className="auth-brand-foot">
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+          <a href="mailto:support@triparchitect.app">Support</a>
         </div>
       </section>
 
-      <section className="value-grid" aria-label="Product highlights">
-        {valueProps.map((prop) => (
-          <article className="surface-card value-card" key={prop.title}>
-            <p className="eyebrow">Why it helps</p>
-            <h2>{prop.title}</h2>
-            <p>{prop.body}</p>
-          </article>
-        ))}
+      <section className="auth-form-panel">
+        <div className="auth-form-inner">
+          <AuthPanel initialMode={initialMode} />
+        </div>
       </section>
     </main>
   )

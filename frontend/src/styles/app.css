@@ -648,6 +648,11 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
   gap: 20px;
+  /* Size each column to its own content. Without this, the grid's default
+     stretch makes the left planner column match the (often much taller) saved-
+     trips sidebar, which inflated the "Generate trip options" button and spread
+     the form fields apart once trips were saved. */
+  align-items: start;
 }
 
 .dashboard-main {
@@ -1125,6 +1130,143 @@ textarea {
 
 .legal-card p + p {
   margin-top: 12px;
+}
+
+/* ---------- Sign in / sign up (split auth layout) ---------- */
+
+.auth-shell {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  min-height: 100vh;
+  min-height: 100svh;
+  width: 100%;
+}
+
+/* Panels are opaque, so suppress the global blurred overlay for a crisp split. */
+body.auth-active::before {
+  opacity: 0;
+}
+
+.auth-brand-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 48px;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background:
+    radial-gradient(circle at 16% 20%, rgba(106, 184, 244, 0.34), transparent 55%),
+    radial-gradient(circle at 84% 16%, rgba(246, 199, 156, 0.3), transparent 52%),
+    radial-gradient(circle at 62% 92%, rgba(171, 177, 226, 0.36), transparent 58%),
+    linear-gradient(160deg, #ffffff 0%, #eef2f8 100%);
+}
+
+.auth-brand-mark {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-brand-hero {
+  display: grid;
+  gap: 18px;
+  max-width: 30rem;
+  margin: auto 0;
+}
+
+.auth-brand-logo {
+  width: clamp(72px, 8vw, 104px);
+  height: auto;
+  filter: drop-shadow(0 18px 40px rgba(7, 18, 38, 0.14));
+  animation: home-logo-float 9s ease-in-out infinite;
+}
+
+.auth-brand-headline {
+  font-family: 'Newsreader', serif;
+  font-size: clamp(2.4rem, 3.4vw, 3.4rem);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  max-width: 14ch;
+}
+
+.auth-brand-sub {
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  max-width: 34ch;
+}
+
+.auth-brand-foot {
+  display: flex;
+  gap: 18px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.auth-brand-foot a:hover {
+  color: var(--ink);
+}
+
+.auth-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: var(--surface-strong);
+}
+
+.auth-form-inner {
+  width: min(400px, 100%);
+}
+
+/* In the split, the form sits directly on the white panel — drop card chrome. */
+.auth-form-panel .auth-panel {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+@media (max-width: 860px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-brand-panel {
+    min-height: auto;
+    gap: 16px;
+    padding: 28px 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .auth-brand-hero {
+    margin: 6px 0;
+    gap: 10px;
+  }
+
+  .auth-brand-logo {
+    display: none;
+  }
+
+  .auth-brand-headline {
+    font-size: clamp(1.9rem, 7vw, 2.4rem);
+  }
+
+  .auth-brand-sub {
+    font-size: 0.98rem;
+  }
+
+  .auth-brand-foot {
+    display: none;
+  }
+
+  .auth-form-panel {
+    padding: 32px 24px 48px;
+  }
 }
 
 /* ---------- Home / docking page ---------- */
