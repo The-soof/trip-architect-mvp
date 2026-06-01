@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 import AppShell from '../components/AppShell'
@@ -17,6 +17,85 @@ function EmptyState({ title, body }) {
   )
 }
 
+// Compact, single trip row: the row links to the trip; secondary actions live
+// behind an overflow menu so the row stays one tidy line of fixed height.
+function TripRow({ to, title, meta, menuItems }) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) {
+      return undefined
+    }
+    function handlePointer(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpen(false)
+      }
+    }
+    function handleKey(event) {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handlePointer)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handlePointer)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  const hasMenu = Boolean(menuItems && menuItems.length)
+
+  return (
+    <div className="trip-row">
+      <Link className="trip-row-main" to={to}>
+        <span className="trip-row-title">{title}</span>
+        <span className="trip-row-meta">{meta}</span>
+      </Link>
+      <div className="trip-row-trailing">
+        {hasMenu ? (
+          <div className="trip-row-menu" ref={menuRef}>
+            <button
+              aria-expanded={open}
+              aria-haspopup="menu"
+              aria-label="More actions"
+              className="trip-row-menu-trigger"
+              onClick={() => setOpen((value) => !value)}
+              type="button"
+            >
+              ⋯
+            </button>
+            {open ? (
+              <div className="trip-row-menu-pop" role="menu">
+                {menuItems.map((item) => (
+                  <button
+                    className="trip-row-menu-item"
+                    disabled={item.disabled}
+                    key={item.label}
+                    onClick={() => {
+                      setOpen(false)
+                      item.onClick()
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <span aria-hidden="true" className="trip-row-chevron">
+            ›
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function isPastTrip(trip) {
   const end = new Date(trip.end_date)
   const today = new Date()
@@ -31,6 +110,7 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
   const [duplicatingTripId, setDuplicatingTripId] = useState('')
   const [prefillTrip, setPrefillTrip] = useState(null)
   const [error, setError] = useState('')
+  const [savedTab, setSavedTab] = useState('upcoming')
 
   const upcomingTrips = useMemo(
     () => dashboard.saved_trips.filter((trip) => !isPastTrip(trip)),
@@ -44,8 +124,11 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
     () => dashboard.recent_trips.some((trip) => ['planning', 'building_itinerary'].includes(trip.status)),
     [dashboard.recent_trips],
   )
+  const recentTrips = useMemo(() => dashboard.recent_trips.slice(0, 3), [dashboard.recent_trips])
   const planningHealth = profile?.home_airport ? 'Ready' : 'Incomplete'
   const showWorkspaceLoading = loadingWorkspace && !dashboard.recent_trips.length && !dashboard.saved_trips.length && !profile
+  const savedCount = dashboard.saved_trips.length
+  const activeSavedTrips = savedTab === 'past' ? pastTrips : upcomingTrips
 
   const intakeDefaults = useMemo(
     () =>
@@ -116,9 +199,9 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
     reloadDashboard().catch(() => {})
   }, [reloadDashboard])
 
-
   return (
     <AppShell
+      compactHeader
       title="Plan the trip. Keep the details together."
       subtitle="Build a route shortlist, reuse saved trips, and keep the next step clear."
     >
@@ -175,110 +258,91 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
 
         <aside className="dashboard-sidebar">
           <section className="surface-card">
-            <div className="section-header">
+            <div className="sidebar-section-head">
               <div>
                 <p className="eyebrow">Saved trips</p>
-                <h2>{dashboard.saved_trips.length ? 'Trip library' : 'No saved trips yet'}</h2>
+                <h2>{savedCount ? 'Trip library' : 'No saved trips yet'}</h2>
               </div>
-              <p>Upcoming trips stay separate from completed itineraries so the workspace stays useful over time.</p>
+              {savedCount ? (
+                <div className="panel-switch saved-tabs" role="tablist" aria-label="Saved trips filter">
+                  <button
+                    aria-selected={savedTab === 'upcoming'}
+                    className={savedTab === 'upcoming' ? 'active' : ''}
+                    onClick={() => setSavedTab('upcoming')}
+                    role="tab"
+                    type="button"
+                  >
+                    Upcoming · {upcomingTrips.length}
+                  </button>
+                  <button
+                    aria-selected={savedTab === 'past'}
+                    className={savedTab === 'past' ? 'active' : ''}
+                    onClick={() => setSavedTab('past')}
+                    role="tab"
+                    type="button"
+                  >
+                    Past · {pastTrips.length}
+                  </button>
+                </div>
+              ) : null}
             </div>
 
-            <div className="trip-bucket">
-              <p className="eyebrow">Upcoming</p>
-              <div className="trip-summary-list">
-                {upcomingTrips.length ? (
-                  upcomingTrips.map((trip) => (
-                    <article className="trip-summary-card trip-summary-block" key={trip.id}>
-                      <div>
-                        <strong>{trip.destination_candidates.join(' · ')}</strong>
-                        <p>{trip.origin}</p>
-                      </div>
-                      <div className="trip-summary-meta">
-                        <span>{tripWindow(trip.start_date, trip.end_date)}</span>
-                        <small>{trip.status}</small>
-                      </div>
-                      <div className="trip-card-actions">
-                        <Link className="secondary-button inline-link-button" to={`/trips/${trip.id}`}>
-                          Continue
-                        </Link>
-                        <button className="ghost-button" onClick={() => setPrefillTrip(trip)} type="button">
-                          Use as starting point
-                        </button>
-                        <button
-                          className="ghost-button"
-                          disabled={duplicatingTripId === trip.id}
-                          onClick={() => handleDuplicateTrip(trip.id)}
-                          type="button"
-                        >
-                          {duplicatingTripId === trip.id ? 'Duplicating...' : 'Duplicate'}
-                        </button>
-                      </div>
-                    </article>
-                  ))
-                ) : (
-                  <EmptyState
-                    title="Your next saved itinerary will show up here."
-                    body="Generate a route shortlist, pick the strongest option, and save it to keep the planning history together."
+            <div className="trip-row-list">
+              {activeSavedTrips.length ? (
+                activeSavedTrips.map((trip) => (
+                  <TripRow
+                    key={trip.id}
+                    menuItems={
+                      savedTab === 'past'
+                        ? [{ label: 'Plan again', onClick: () => setPrefillTrip(trip) }]
+                        : [
+                            { label: 'Use as starting point', onClick: () => setPrefillTrip(trip) },
+                            {
+                              label: duplicatingTripId === trip.id ? 'Duplicating…' : 'Duplicate',
+                              disabled: duplicatingTripId === trip.id,
+                              onClick: () => handleDuplicateTrip(trip.id),
+                            },
+                          ]
+                    }
+                    meta={
+                      savedTab === 'past'
+                        ? `${tripWindow(trip.start_date, trip.end_date)} · ${trip.saved_trip?.confirmed_booking_count || 0} confirmed`
+                        : `${tripWindow(trip.start_date, trip.end_date)} · ${trip.status}`
+                    }
+                    title={trip.destination_candidates.join(' · ')}
+                    to={`/trips/${trip.id}`}
                   />
-                )}
-              </div>
-            </div>
-
-            <div className="trip-bucket">
-              <p className="eyebrow">Past trips</p>
-              <div className="trip-summary-list">
-                {pastTrips.length ? (
-                  pastTrips.map((trip) => (
-                    <article className="trip-summary-card trip-summary-block" key={trip.id}>
-                      <div>
-                        <strong>{trip.destination_candidates.join(' · ')}</strong>
-                        <p>{trip.origin}</p>
-                      </div>
-                      <div className="trip-summary-meta">
-                        <span>{tripWindow(trip.start_date, trip.end_date)}</span>
-                        <small>{trip.saved_trip?.confirmed_booking_count || 0} confirmed</small>
-                      </div>
-                      <div className="trip-card-actions">
-                        <Link className="secondary-button inline-link-button" to={`/trips/${trip.id}`}>
-                          Reopen
-                        </Link>
-                        <button className="ghost-button" onClick={() => setPrefillTrip(trip)} type="button">
-                          Plan again
-                        </button>
-                      </div>
-                    </article>
-                  ))
-                ) : (
-                  <EmptyState
-                    title="Completed trips stay here for easy reference."
-                    body="Once a trip has passed, you can still reopen it or use it as the base for another itinerary."
-                  />
-                )}
-              </div>
+                ))
+              ) : savedTab === 'past' ? (
+                <EmptyState
+                  title="Completed trips stay here for easy reference."
+                  body="Once a trip has passed, you can still reopen it or use it as the base for another itinerary."
+                />
+              ) : (
+                <EmptyState
+                  title="Your next saved itinerary will show up here."
+                  body="Generate a route shortlist, pick the strongest option, and save it to keep the planning history together."
+                />
+              )}
             </div>
           </section>
 
           <section className="surface-card">
-            <div className="section-header">
+            <div className="sidebar-section-head">
               <div>
                 <p className="eyebrow">Recent plans</p>
-                <h2>{dashboard.recent_trips.length ? 'Recent planning activity' : 'No planning runs yet'}</h2>
+                <h2>{dashboard.recent_trips.length ? 'Recent activity' : 'No planning runs yet'}</h2>
               </div>
-              <p>Every request stays re-openable, even before it becomes a saved itinerary.</p>
             </div>
-            <div className="trip-summary-list">
-              {dashboard.recent_trips.length ? (
-                dashboard.recent_trips.slice(0, 4).map((trip) => (
-                  <Link className="trip-summary-card" key={trip.id} to={`/trips/${trip.id}`}>
-                    <div>
-                      <strong>{trip.destination_candidates.join(' · ')}</strong>
-                      <p>{trip.origin}</p>
-                    </div>
-                    <div className="trip-summary-meta">
-                      <span>{tripWindow(trip.start_date, trip.end_date)}</span>
-                      <small>{trip.status}</small>
-                    </div>
-                  </Link>
+            <div className="trip-row-list">
+              {recentTrips.length ? (
+                recentTrips.map((trip) => (
+                  <TripRow
+                    key={trip.id}
+                    meta={`${tripWindow(trip.start_date, trip.end_date)} · ${trip.status}`}
+                    title={trip.destination_candidates.join(' · ')}
+                    to={`/trips/${trip.id}`}
+                  />
                 ))
               ) : (
                 <EmptyState
