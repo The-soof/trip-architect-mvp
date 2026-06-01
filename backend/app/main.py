@@ -21,8 +21,39 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    Base.metadata.create_all(bind=engine)
-    ensure_runtime_schema(engine)
+    import json as _json
+    import time
+    from sqlalchemy.exc import OperationalError
+
+    max_attempts = 5
+    delay = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            ensure_runtime_schema(engine)
+            break
+        except (OperationalError, Exception) as e:
+            print(
+                "trip_architect.startup "
+                + _json.dumps({
+                    "level": "WARNING",
+                    "message": f"Database connection attempt {attempt}/{max_attempts} failed: {e}. Retrying in {delay} seconds..."
+                }),
+                flush=True,
+            )
+            if attempt == max_attempts:
+                print(
+                    "trip_architect.startup "
+                    + _json.dumps({
+                        "level": "ERROR",
+                        "message": f"Database initialization failed after {max_attempts} attempts. Exiting."
+                    }),
+                    flush=True,
+                )
+                raise e
+            time.sleep(delay)
+            delay *= 2
+
     recover_interrupted_trip_jobs()
     if settings.is_sqlite and settings.app_env != "test":
         import json as _json

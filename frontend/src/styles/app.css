@@ -1273,6 +1273,14 @@ body.auth-active::before {
   white-space: nowrap;
 }
 
+/* Each sidebar .surface-card is its own stacking context (backdrop-filter), so
+   the saved-trips card must outrank the sibling Recent card; otherwise an open
+   row menu is painted behind it. */
+.dashboard-sidebar > .dashboard-trips-card {
+  position: relative;
+  z-index: 2;
+}
+
 .trip-row-list {
   display: grid;
   gap: 8px;

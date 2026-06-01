@@ -257,7 +257,7 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
         </div>
 
         <aside className="dashboard-sidebar">
-          <section className="surface-card">
+          <section className="surface-card dashboard-trips-card">
             <div className="sidebar-section-head">
               <div>
                 <p className="eyebrow">Saved trips</p>
