@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
@@ -28,12 +28,14 @@ def _trip_query():
     return (
         select(TripRequest)
         .options(
-            joinedload(TripRequest.options).joinedload(TripOption.itinerary).joinedload(Itinerary.days),
-            joinedload(TripRequest.itineraries).joinedload(Itinerary.days),
-            joinedload(TripRequest.flight_options),
-            joinedload(TripRequest.hotel_options),
-            joinedload(TripRequest.confirmed_bookings),
-            joinedload(TripRequest.agent_runs),
+            selectinload(TripRequest.options).options(
+                joinedload(TripOption.itinerary).selectinload(Itinerary.days)
+            ),
+            selectinload(TripRequest.itineraries).selectinload(Itinerary.days),
+            selectinload(TripRequest.flight_options),
+            selectinload(TripRequest.hotel_options),
+            selectinload(TripRequest.confirmed_bookings),
+            selectinload(TripRequest.agent_runs),
             joinedload(TripRequest.saved_trip),
         )
         .order_by(TripRequest.created_at.desc())
