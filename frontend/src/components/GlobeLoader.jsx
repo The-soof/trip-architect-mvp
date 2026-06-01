@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // Faithful port of the "Globe Loader" design (Globe Loader.html).
 // d3 + topojson-client are loaded once from CDN and cached, exactly as the
@@ -12,6 +12,38 @@ const ATLAS_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m
 
 let scriptsPromise = null
 let atlasPromise = null
+
+// Generic, on-brand travel tips shown at the bottom of the full-screen loaders
+// to fill the longer wait. Kept tasteful (no jokes) to match the product tone.
+const TRAVEL_TIPS = [
+  'Mid-week flights are often cheaper than weekend departures.',
+  'Pack a portable charger for long transit days.',
+  'Keep an offline photo of your passport in case you misplace it.',
+  'Booking stays near transit can cut your daily travel time.',
+  'Carry-on only? Roll clothes to save space and avoid wrinkles.',
+  'Tell your bank your travel dates so your card does not get frozen.',
+  'Early-morning sightseeing beats the crowds and the midday heat.',
+  'Keep a little local currency on hand for taxis and small vendors.',
+]
+
+const MESSAGE_INTERVAL = 4000
+const TIP_INTERVAL = 7000
+
+// Cycle an index through `length` items every `delay` ms while `enabled`.
+function useRotatingIndex(length, delay, enabled) {
+  const [index, setIndex] = useState(0)
+  useEffect(() => {
+    setIndex(0)
+    if (!enabled || length <= 1) {
+      return undefined
+    }
+    const id = window.setInterval(() => {
+      setIndex((current) => (current + 1) % length)
+    }, delay)
+    return () => window.clearInterval(id)
+  }, [length, delay, enabled])
+  return index
+}
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -61,8 +93,16 @@ function ensureAtlas() {
   return atlasPromise
 }
 
-export default function GlobeLoader({ fullscreen = false, className = '' }) {
+export default function GlobeLoader({
+  fullscreen = false,
+  className = '',
+  title = '',
+  messages = [],
+  showTips = false,
+}) {
   const canvasRef = useRef(null)
+  const messageIndex = useRotatingIndex(messages.length, MESSAGE_INTERVAL, messages.length > 1)
+  const tipIndex = useRotatingIndex(TRAVEL_TIPS.length, TIP_INTERVAL, showTips)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -254,13 +294,29 @@ export default function GlobeLoader({ fullscreen = false, className = '' }) {
 
   return (
     <div
-      aria-label="Loading"
       className={`globe-loader${fullscreen ? ' globe-loader-fullscreen' : ''}${className ? ` ${className}` : ''}`}
-      role="img"
     >
-      <div className="globe-loader-stage">
+      {title || messages.length ? (
+        <div className="globe-loader-copy">
+          {title ? <p className="globe-loader-title">{title}</p> : null}
+          {messages.length ? (
+            <p aria-live="polite" className="globe-loader-sub" key={messageIndex}>
+              {messages[messageIndex % messages.length]}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div aria-label="Loading" className="globe-loader-stage" role="img">
         <canvas height="320" ref={canvasRef} width="320" />
       </div>
+
+      {showTips ? (
+        <p className="globe-loader-tip" key={tipIndex}>
+          <span className="globe-loader-tip-label">Tip</span>
+          {TRAVEL_TIPS[tipIndex % TRAVEL_TIPS.length]}
+        </p>
+      ) : null}
     </div>
   )
 }

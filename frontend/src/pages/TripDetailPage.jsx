@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client'
 import AppShell from '../components/AppShell'
 import GlobeLoader from '../components/GlobeLoader'
 import InventoryPanel from '../components/InventoryPanel'
+import { BUILDING_LOADER, OPTIONS_LOADER } from '../lib/loaderCopy'
 import OptionCard from '../components/OptionCard'
 import Timeline from '../components/Timeline'
 import { useSession } from '../hooks/useSession.jsx'
@@ -191,7 +192,7 @@ export default function TripDetailPage() {
   }
 
   if (showPlanningScreen) {
-    return <GlobeLoader fullscreen />
+    return <GlobeLoader fullscreen messages={OPTIONS_LOADER.messages} showTips title={OPTIONS_LOADER.title} />
   }
 
   return (
@@ -333,7 +334,10 @@ export default function TripDetailPage() {
       </div>
 
       {isGeneratingDetail && activeTab !== 'Options' ? (
-        <GlobeLoader />
+        <GlobeLoader
+          messages={(BUILDING_LOADER[activeTab] || BUILDING_LOADER.Itinerary).messages}
+          title={(BUILDING_LOADER[activeTab] || BUILDING_LOADER.Itinerary).title}
+        />
       ) : (
         <>
       {requiresSelectedOption && !selectedOption ? (

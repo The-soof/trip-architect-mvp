@@ -1587,17 +1587,21 @@ body.home-active::before {
 
 /* ----- Globe loading screen (Globe Loader design) ----- */
 .globe-loader {
-  display: grid;
-  place-items: center;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
   width: 100%;
-  min-height: 360px;
+  min-height: 400px;
   padding: 32px;
   /* Inline: a soft halo behind the globe that fades to transparent so the
      edges dissolve into the page background instead of forming a block. */
   background:
-    radial-gradient(circle at 50% 46%, rgba(106, 184, 244, 0.2), transparent 56%),
-    radial-gradient(circle at 61% 56%, rgba(246, 199, 156, 0.15), transparent 60%),
-    radial-gradient(circle at 41% 58%, rgba(171, 177, 226, 0.17), transparent 62%);
+    radial-gradient(circle at 50% 52%, rgba(106, 184, 244, 0.2), transparent 56%),
+    radial-gradient(circle at 61% 62%, rgba(246, 199, 156, 0.15), transparent 60%),
+    radial-gradient(circle at 41% 64%, rgba(171, 177, 226, 0.17), transparent 62%);
 }
 
 .globe-loader-fullscreen {
@@ -1611,6 +1615,64 @@ body.home-active::before {
     radial-gradient(circle at 72% 40%, rgba(246, 199, 156, 0.26), transparent 20rem),
     radial-gradient(circle at 55% 74%, rgba(171, 177, 226, 0.26), transparent 22rem),
     linear-gradient(180deg, #ffffff 0%, #fbfbfd 54%, #f2f5f8 100%);
+}
+
+.globe-loader-copy {
+  max-width: 30rem;
+  text-align: center;
+}
+
+.globe-loader-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.globe-loader-sub {
+  margin: 6px 0 0;
+  min-height: 1.4em;
+  font-size: 0.95rem;
+  color: var(--muted);
+  animation: globeLoaderFade 600ms ease;
+}
+
+.globe-loader-tip {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(34rem, calc(100% - 48px));
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+  animation: globeLoaderFade 600ms ease;
+}
+
+.globe-loader-tip-label {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@keyframes globeLoaderFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .globe-loader-stage {

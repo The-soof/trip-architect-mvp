@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client'
 import AppShell from '../components/AppShell'
 import GlobeLoader from '../components/GlobeLoader'
 import IntakeForm from '../components/IntakeForm'
+import { OPTIONS_LOADER } from '../lib/loaderCopy'
 import { useSession } from '../hooks/useSession.jsx'
 import { tripWindow } from '../lib/format'
 
@@ -159,7 +160,9 @@ export default function DashboardPage({ dashboard, loadingWorkspace, profile, re
             </section>
           ) : null}
 
-          {submitting ? <GlobeLoader fullscreen /> : null}
+          {submitting ? (
+            <GlobeLoader fullscreen messages={OPTIONS_LOADER.messages} showTips title={OPTIONS_LOADER.title} />
+          ) : null}
           <IntakeForm
             initialValues={intakeDefaults}
             onClearPreset={() => setPrefillTrip(null)}
