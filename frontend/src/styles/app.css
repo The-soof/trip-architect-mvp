@@ -1592,11 +1592,12 @@ body.home-active::before {
   width: 100%;
   min-height: 360px;
   padding: 32px;
+  /* Inline: a soft halo behind the globe that fades to transparent so the
+     edges dissolve into the page background instead of forming a block. */
   background:
-    radial-gradient(circle at 38% 28%, rgba(106, 184, 244, 0.3), transparent 22rem),
-    radial-gradient(circle at 72% 40%, rgba(246, 199, 156, 0.26), transparent 20rem),
-    radial-gradient(circle at 55% 74%, rgba(171, 177, 226, 0.26), transparent 22rem),
-    linear-gradient(180deg, #ffffff 0%, #fbfbfd 54%, #f2f5f8 100%);
+    radial-gradient(circle at 50% 46%, rgba(106, 184, 244, 0.2), transparent 56%),
+    radial-gradient(circle at 61% 56%, rgba(246, 199, 156, 0.15), transparent 60%),
+    radial-gradient(circle at 41% 58%, rgba(171, 177, 226, 0.17), transparent 62%);
 }
 
 .globe-loader-fullscreen {
@@ -1604,6 +1605,12 @@ body.home-active::before {
   inset: 0;
   z-index: 1000;
   min-height: 100vh;
+  /* Full-screen takeover keeps the complete opaque design background. */
+  background:
+    radial-gradient(circle at 38% 28%, rgba(106, 184, 244, 0.3), transparent 22rem),
+    radial-gradient(circle at 72% 40%, rgba(246, 199, 156, 0.26), transparent 20rem),
+    radial-gradient(circle at 55% 74%, rgba(171, 177, 226, 0.26), transparent 22rem),
+    linear-gradient(180deg, #ffffff 0%, #fbfbfd 54%, #f2f5f8 100%);
 }
 
 .globe-loader-stage {
