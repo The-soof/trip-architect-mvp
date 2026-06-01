@@ -26,8 +26,8 @@ const TRAVEL_TIPS = [
   'Keep a little local currency on hand for taxis and small vendors.',
 ]
 
-const MESSAGE_INTERVAL = 4000
-const TIP_INTERVAL = 7000
+const MESSAGE_INTERVAL = 7000
+const TIP_INTERVAL = 10000
 
 // Cycle an index through `length` items every `delay` ms while `enabled`.
 function useRotatingIndex(length, delay, enabled) {

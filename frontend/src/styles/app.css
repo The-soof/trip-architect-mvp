@@ -1588,6 +1588,7 @@ body.home-active::before {
 /* ----- Globe loading screen (Globe Loader design) ----- */
 .globe-loader {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1596,12 +1597,24 @@ body.home-active::before {
   width: 100%;
   min-height: 400px;
   padding: 32px;
-  /* Inline: a soft halo behind the globe that fades to transparent so the
-     edges dissolve into the page background instead of forming a block. */
+}
+
+/* Inline: a soft halo behind the globe, painted on its own layer so it can be
+   faded to transparent on all four edges without touching the globe or text.
+   The radial gradients dissolve the left/right edges; the vertical mask
+   dissolves the top/bottom edges, so the whole block blends into the page. */
+.globe-loader:not(.globe-loader-fullscreen)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background:
     radial-gradient(circle at 50% 52%, rgba(106, 184, 244, 0.2), transparent 56%),
     radial-gradient(circle at 61% 62%, rgba(246, 199, 156, 0.15), transparent 60%),
     radial-gradient(circle at 41% 64%, rgba(171, 177, 226, 0.17), transparent 62%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 26%, #000 74%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 26%, #000 74%, transparent 100%);
 }
 
 .globe-loader-fullscreen {
