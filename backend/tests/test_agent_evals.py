@@ -187,6 +187,7 @@ def test_gemini_option_generation_normalizes_structured_output(monkeypatch) -> N
         return schema.model_validate(
             {
                 "planning_summary": "Compact Barcelona shortlist.",
+                "brief_summary": "Food and culture focus in Barcelona with a relaxed pace.",
                 "options": [
                     {
                         "name": "Old City Food Base",

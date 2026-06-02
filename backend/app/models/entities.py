@@ -52,6 +52,7 @@ class TripRequest(Base):
     end_date: Mapped[date] = mapped_column(Date())
     destination_candidates: Mapped[list[str]] = mapped_column(JSON)
     trip_style: Mapped[str] = mapped_column(Text())
+    brief_summary: Mapped[str | None] = mapped_column(Text(), nullable=True)
     budget_range: Mapped[str | None] = mapped_column(String(80), nullable=True)
     traveler_count: Mapped[int] = mapped_column(Integer, default=1)
     pace_preference: Mapped[str | None] = mapped_column(String(40), nullable=True)

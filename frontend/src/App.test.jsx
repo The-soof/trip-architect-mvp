@@ -29,7 +29,7 @@ test('renders landing page hero for signed out users', () => {
     </MemoryRouter>,
   )
 
-  expect(screen.getByText(/saved bookable itinerary/i)).toBeInTheDocument()
+  expect(screen.getByText(/deepen the winning plan/i)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /start planning/i })).toBeInTheDocument()
 })
 

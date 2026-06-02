@@ -1010,11 +1010,67 @@ textarea {
 }
 
 /* Trip brief blurb reads as body text, not a display heading. */
+.summary-brief-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.summary-brief-body {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .summary-brief {
-  max-width: 60ch;
+  max-width: 72ch;
   color: var(--ink);
   font-size: 1.05rem;
   line-height: 1.5;
+  margin: 0;
+}
+
+.brief-toggle-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: var(--accent-strong);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 150ms ease;
+}
+
+.brief-toggle-btn:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.summary-brief-expanded {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.04);
+  border: 1px solid var(--line);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 76ch;
+  animation: briefFadeIn 200ms ease;
+}
+
+@keyframes briefFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Trip-brief metadata: a tidy, top-aligned set of label/value stats. */

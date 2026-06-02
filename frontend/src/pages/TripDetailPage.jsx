@@ -12,6 +12,13 @@ import { tripWindow } from '../lib/format'
 
 const TRIP_TABS = ['Options', 'Itinerary', 'Stays', 'Travel']
 
+function cleanTripStyleText(text) {
+  if (!text) return ''
+  let cleaned = text.split(/traveler profile interests:/i)[0]
+  cleaned = cleaned.split(/regeneration note:/i)[0]
+  return cleaned.trim()
+}
+
 export default function TripDetailPage() {
   const { tripId } = useParams()
   const { token } = useSession()
@@ -26,6 +33,7 @@ export default function TripDetailPage() {
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFeedback, setRegenerateFeedback] = useState('')
   const [pendingSelectionOptionId, setPendingSelectionOptionId] = useState('')
+  const [briefExpanded, setBriefExpanded] = useState(false)
 
   async function loadTrip({ silent = false } = {}) {
     try {
@@ -333,9 +341,25 @@ export default function TripDetailPage() {
       ) : null}
 
       <section className="surface-card summary-strip">
-        <div>
+        <div className="summary-brief-wrapper">
           <p className="eyebrow">Trip brief</p>
-          <p className="summary-brief">{trip.trip_style}</p>
+          <div className="summary-brief-body">
+            <p className="summary-brief">
+              {trip.brief_summary ? trip.brief_summary : (cleanTripStyleText(trip.trip_style).length > 120 ? cleanTripStyleText(trip.trip_style).slice(0, 117) + '...' : cleanTripStyleText(trip.trip_style))}
+            </p>
+            <button
+              type="button"
+              className="brief-toggle-btn"
+              onClick={() => setBriefExpanded(!briefExpanded)}
+            >
+              {briefExpanded ? 'Show less' : 'View original input'}
+            </button>
+          </div>
+          {briefExpanded && (
+            <div className="summary-brief-expanded">
+              <p>{cleanTripStyleText(trip.trip_style)}</p>
+            </div>
+          )}
         </div>
         <div className="summary-metadata">
           <div className="summary-stat">

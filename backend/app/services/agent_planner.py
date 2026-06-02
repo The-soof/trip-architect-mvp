@@ -96,6 +96,7 @@ class GeminiOptionSeed(BaseModel):
 
 class GeminiTripOptionsPayload(BaseModel):
     planning_summary: str
+    brief_summary: str = Field(description="A concise, 2-to-3 line summary of the traveler's core goals, interests, and vibes, ignoring any appended system notes or repeated regeneration instructions.")
     options: list[GeminiOptionSeed] = Field(default_factory=list)
 
 
@@ -142,6 +143,7 @@ class DeepItineraryPayload(BaseModel):
 class PlanningArtifacts:
     mode: str
     planning_summary: str
+    brief_summary: str
     options: list[dict[str, Any]]
     sources: list[dict[str, Any]]
     steps: list[dict[str, Any]]
@@ -708,6 +710,15 @@ class TripPlanner:
         ]
         if fallback_reason:
             steps.append({"agent": "fallback-guard", "status": "warning", "detail": fallback_reason})
+
+        # Create a mock brief summary
+        clean_text = payload.trip_style.split(" Traveler profile interests:")[0]
+        clean_text = clean_text.split("Regeneration note:")[0].strip()
+        if len(clean_text) > 120:
+            mock_summary = clean_text[:117] + "..."
+        else:
+            mock_summary = clean_text
+
         return PlanningArtifacts(
             mode="mock",
             planning_summary=(
@@ -715,6 +726,7 @@ class TripPlanner:
                 if not fallback_reason
                 else f"Generated {len(options)} trip options with the deterministic fallback planner after the live path failed."
             ),
+            brief_summary=mock_summary,
             options=options,
             sources=_planning_sources(candidates, "mock"),
             steps=steps,
@@ -801,6 +813,10 @@ class TripPlanner:
         prompt = (
             "You are Trip Architect's trip-options planner. Return only valid JSON. "
             "Generate 4 to 6 realistic route options using only the user's trip brief, not web search. "
+            "Also generate a concise, 2-to-3 line summary ('brief_summary') of the traveler's core goals, "
+            "interests, and pacing preferences (e.g. 'Two 19-year-olds looking for a fun week-long duo trip "
+            "with nightlife, before a family stay in Istanbul. Wants to avoid long travel times.'). "
+            "Ignore any appended system notes or repeated regeneration instructions in the summary. "
             "Each option must include: name, summary, rationale, tradeoffs, destination_order, days_by_stop, pace_label, budget_confidence, fit_score. "
             "Keep destination_order limited to the provided candidates and make days_by_stop feasible for the exact trip length. "
             "Be decisive, concrete, and avoid duplicate route orders. "
@@ -839,6 +855,7 @@ class TripPlanner:
         return PlanningArtifacts(
             mode="gemini",
             planning_summary=structured.planning_summary,
+            brief_summary=structured.brief_summary,
             options=normalized_options,
             sources=_planning_sources(payload.destination_candidates[:6], "gemini"),
             steps=[

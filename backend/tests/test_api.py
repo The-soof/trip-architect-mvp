@@ -379,6 +379,7 @@ def test_trip_planning_bounds_gemini_enum_text(client: TestClient, monkeypatch) 
         return PlanningArtifacts(
             mode="gemini",
             planning_summary="Gemini produced verbose labels.",
+            brief_summary="A short plan.",
             options=[
                 {
                     "name": "Barcelona food weekend",

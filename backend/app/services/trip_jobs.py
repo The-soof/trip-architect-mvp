@@ -155,6 +155,7 @@ def _run_trip_options_generation(trip_id: str) -> None:
             )
 
         trip.planning_mode = planning.mode
+        trip.brief_summary = planning.brief_summary
         trip.status = "planned"
 
         if run is not None:

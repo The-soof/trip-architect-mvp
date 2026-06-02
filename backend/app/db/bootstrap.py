@@ -46,6 +46,8 @@ def ensure_runtime_schema(engine: Engine) -> None:
                 )
             if "locked_flight_option_id" not in trip_columns:
                 connection.execute(text("ALTER TABLE trip_requests ADD COLUMN locked_flight_option_id VARCHAR(36)"))
+            if "brief_summary" not in trip_columns:
+                connection.execute(text("ALTER TABLE trip_requests ADD COLUMN brief_summary TEXT"))
 
         if "confirmed_bookings" not in existing_tables:
             ConfirmedBooking.__table__.create(bind=connection, checkfirst=True)

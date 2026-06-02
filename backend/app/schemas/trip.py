@@ -206,6 +206,7 @@ class TripRead(BaseModel):
     end_date: date
     destination_candidates: list[str]
     trip_style: str
+    brief_summary: str | None = None
     budget_range: str | None
     traveler_count: int
     pace_preference: str | None
