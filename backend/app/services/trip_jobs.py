@@ -154,6 +154,16 @@ def _run_trip_options_generation(trip_id: str) -> None:
                 )
             )
 
+        # Collect all unique cities from the planned options to update the trip candidates list
+        planned_cities = []
+        for option in planning.options:
+            for city in option.get("destination_order", []):
+                cleaned_city = city.strip()
+                if cleaned_city and cleaned_city not in planned_cities:
+                    planned_cities.append(cleaned_city)
+        if planned_cities:
+            trip.destination_candidates = planned_cities
+
         trip.planning_mode = planning.mode
         trip.brief_summary = planning.brief_summary
         trip.status = "planned"

@@ -1062,6 +1062,42 @@ textarea {
   animation: briefFadeIn 200ms ease;
 }
 
+.brief-expanded-original {
+  margin: 0;
+}
+
+.brief-expanded-adjustments {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.brief-expanded-adjustments strong {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.brief-expanded-adjustments ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.brief-expanded-adjustments li {
+  font-size: 0.88rem;
+  font-style: italic;
+  color: var(--ink);
+  padding-left: 12px;
+  border-left: 2px solid var(--accent-strong);
+}
+
 @keyframes briefFadeIn {
   from {
     opacity: 0;

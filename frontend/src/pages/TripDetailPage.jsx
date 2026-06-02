@@ -12,11 +12,15 @@ import { tripWindow } from '../lib/format'
 
 const TRIP_TABS = ['Options', 'Itinerary', 'Stays', 'Travel']
 
-function cleanTripStyleText(text) {
-  if (!text) return ''
-  let cleaned = text.split(/traveler profile interests:/i)[0]
-  cleaned = cleaned.split(/regeneration note:/i)[0]
-  return cleaned.trim()
+function getBriefDetails(text) {
+  if (!text) return { originalBrief: '', regenNotes: [] }
+  const parts = text.split(/regeneration note:/i)
+  const originalBrief = parts[0].split(/traveler profile interests:/i)[0].trim()
+  const regenNotes = parts
+    .slice(1)
+    .map((p) => p.split(/traveler profile interests:/i)[0].trim())
+    .filter(Boolean)
+  return { originalBrief, regenNotes }
 }
 
 export default function TripDetailPage() {
@@ -345,7 +349,7 @@ export default function TripDetailPage() {
           <p className="eyebrow">Trip brief</p>
           <div className="summary-brief-body">
             <p className="summary-brief">
-              {trip.brief_summary ? trip.brief_summary : (cleanTripStyleText(trip.trip_style).length > 120 ? cleanTripStyleText(trip.trip_style).slice(0, 117) + '...' : cleanTripStyleText(trip.trip_style))}
+              {trip.brief_summary ? trip.brief_summary : (getBriefDetails(trip.trip_style).originalBrief.length > 120 ? getBriefDetails(trip.trip_style).originalBrief.slice(0, 117) + '...' : getBriefDetails(trip.trip_style).originalBrief)}
             </p>
             <button
               type="button"
@@ -357,7 +361,17 @@ export default function TripDetailPage() {
           </div>
           {briefExpanded && (
             <div className="summary-brief-expanded">
-              <p>{cleanTripStyleText(trip.trip_style)}</p>
+              <p className="brief-expanded-original">{getBriefDetails(trip.trip_style).originalBrief}</p>
+              {getBriefDetails(trip.trip_style).regenNotes.length > 0 && (
+                <div className="brief-expanded-adjustments">
+                  <strong>Adjustments made during planning:</strong>
+                  <ul>
+                    {getBriefDetails(trip.trip_style).regenNotes.map((note, idx) => (
+                      <li key={idx}>“{note}”</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
