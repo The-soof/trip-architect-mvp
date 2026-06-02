@@ -57,7 +57,7 @@ export default function InventoryPanel({
   }, [bookingMap, hotelSort, hotels, hotelSelectionFilter])
 
   return (
-    <section className="inventory-grid">
+    <section className={`inventory-grid${mode === 'all' ? '' : ' inventory-grid--single'}`}>
       {showFlights ? (
         <div className="surface-card">
           <div className="section-header">
@@ -96,49 +96,55 @@ export default function InventoryPanel({
                 const isLockedFlight = flightSelectionLocked && lockedFlightOptionId === flight.id
                 const restrictFlightActions = flightSelectionLocked && lockedFlightOptionId !== flight.id
                 return (
-                  <article className="inventory-card inventory-block" key={flight.id}>
-                    <div>
-                      <strong>{flight.carrier}</strong>
-                      <p>{flight.route_summary}</p>
-                      <small className="muted-inline">
-                        {flight.source_name} · {flight.match_reason}
-                      </small>
+                  <article className="inventory-card" key={flight.id}>
+                    <div className="inventory-card-head">
+                      <div className="inventory-card-title">
+                        <strong>{flight.carrier}</strong>
+                        <p>{flight.route_summary}</p>
+                      </div>
+                      <div className="inventory-card-price">
+                        <strong>{formatMoney(flight.price)}</strong>
+                        <small>{flight.comfort_label}</small>
+                      </div>
                     </div>
-                    <div className="inventory-meta">
-                      <span>{formatMoney(flight.price)}</span>
-                      <small>{flight.comfort_label}</small>
-                      <small className={`selection-pill selection-${selectionState}`}>{selectionState}</small>
+                    <p className="inventory-card-meta">
+                      {flight.source_name} · {flight.match_reason}
+                    </p>
+                    <div className="inventory-card-foot">
+                      <span className={`status-pill status-${selectionState}`}>{selectionState}</span>
+                      <div className="inventory-actions">
+                        <button
+                          className="ghost-button"
+                          disabled={bookingSavingKey === `flight:${flight.id}` || flightSelectionLocked}
+                          onClick={() => onUpdateBookingSelection('flight', flight.id, 'saved')}
+                          type="button"
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={bookingSavingKey === `flight:${flight.id}` || restrictFlightActions}
+                          onClick={() => onUpdateBookingSelection('flight', flight.id, 'confirmed')}
+                          type="button"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          className="ghost-button"
+                          disabled={bookingSavingKey === `flight:${flight.id}` || flightSelectionLocked}
+                          onClick={() => onUpdateBookingSelection('flight', flight.id, 'none')}
+                          type="button"
+                        >
+                          Clear
+                        </button>
+                        <a className="ghost-button" href={flight.booking_url} rel="noreferrer" target="_blank">
+                          Open booking ↗
+                        </a>
+                      </div>
                     </div>
-                    <div className="trip-card-actions">
-                      <button
-                        className="ghost-button"
-                        disabled={bookingSavingKey === `flight:${flight.id}` || flightSelectionLocked}
-                        onClick={() => onUpdateBookingSelection('flight', flight.id, 'saved')}
-                        type="button"
-                      >
-                        Save
-                      </button>
-                      <button
-                        className="secondary-button"
-                        disabled={bookingSavingKey === `flight:${flight.id}` || restrictFlightActions}
-                        onClick={() => onUpdateBookingSelection('flight', flight.id, 'confirmed')}
-                        type="button"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        className="ghost-button"
-                        disabled={bookingSavingKey === `flight:${flight.id}` || flightSelectionLocked}
-                        onClick={() => onUpdateBookingSelection('flight', flight.id, 'none')}
-                        type="button"
-                      >
-                        Clear
-                      </button>
-                      <a href={flight.booking_url} rel="noreferrer" target="_blank">
-                        Open booking
-                      </a>
-                      {isLockedFlight ? <small className="muted-inline">Locked flight selection</small> : null}
-                    </div>
+                    {isLockedFlight ? (
+                      <small className="muted-inline inventory-locked-note">Locked flight selection</small>
+                    ) : null}
                   </article>
                 )
               })
@@ -183,51 +189,55 @@ export default function InventoryPanel({
               visibleHotels.map((hotel) => {
                 const selectionState = bookingMap[`hotel:${hotel.id}`] || 'available'
                 return (
-                  <article className="inventory-card inventory-block" key={hotel.id}>
-                    <div>
-                      <strong>{hotel.name}</strong>
-                      <p>
-                        {hotel.city} · {hotel.neighborhood}
-                      </p>
-                      <small className="muted-inline">
-                        {hotel.source_name} · {hotel.match_reason}
-                      </small>
+                  <article className="inventory-card" key={hotel.id}>
+                    <div className="inventory-card-head">
+                      <div className="inventory-card-title">
+                        <strong>{hotel.name}</strong>
+                        <p>
+                          {hotel.city} · {hotel.neighborhood}
+                        </p>
+                      </div>
+                      <div className="inventory-card-price">
+                        <strong>{formatMoney(hotel.nightly_rate)}/night</strong>
+                        <small>
+                          {hotel.style_label} · {hotel.rating.toFixed(1)}
+                        </small>
+                      </div>
                     </div>
-                    <div className="inventory-meta">
-                      <span>{formatMoney(hotel.nightly_rate)}/night</span>
-                      <small>
-                        {hotel.style_label} · {hotel.rating.toFixed(1)}
-                      </small>
-                      <small className={`selection-pill selection-${selectionState}`}>{selectionState}</small>
-                    </div>
-                    <div className="trip-card-actions">
-                      <button
-                        className="ghost-button"
-                        disabled={bookingSavingKey === `hotel:${hotel.id}`}
-                        onClick={() => onUpdateBookingSelection('hotel', hotel.id, 'saved')}
-                        type="button"
-                      >
-                        Save
-                      </button>
-                      <button
-                        className="secondary-button"
-                        disabled={bookingSavingKey === `hotel:${hotel.id}`}
-                        onClick={() => onUpdateBookingSelection('hotel', hotel.id, 'confirmed')}
-                        type="button"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        className="ghost-button"
-                        disabled={bookingSavingKey === `hotel:${hotel.id}`}
-                        onClick={() => onUpdateBookingSelection('hotel', hotel.id, 'none')}
-                        type="button"
-                      >
-                        Clear
-                      </button>
-                      <a href={hotel.booking_url} rel="noreferrer" target="_blank">
-                        Open booking
-                      </a>
+                    <p className="inventory-card-meta">
+                      {hotel.source_name} · {hotel.match_reason}
+                    </p>
+                    <div className="inventory-card-foot">
+                      <span className={`status-pill status-${selectionState}`}>{selectionState}</span>
+                      <div className="inventory-actions">
+                        <button
+                          className="ghost-button"
+                          disabled={bookingSavingKey === `hotel:${hotel.id}`}
+                          onClick={() => onUpdateBookingSelection('hotel', hotel.id, 'saved')}
+                          type="button"
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={bookingSavingKey === `hotel:${hotel.id}`}
+                          onClick={() => onUpdateBookingSelection('hotel', hotel.id, 'confirmed')}
+                          type="button"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          className="ghost-button"
+                          disabled={bookingSavingKey === `hotel:${hotel.id}`}
+                          onClick={() => onUpdateBookingSelection('hotel', hotel.id, 'none')}
+                          type="button"
+                        >
+                          Clear
+                        </button>
+                        <a className="ghost-button" href={hotel.booking_url} rel="noreferrer" target="_blank">
+                          Open booking ↗
+                        </a>
+                      </div>
                     </div>
                   </article>
                 )

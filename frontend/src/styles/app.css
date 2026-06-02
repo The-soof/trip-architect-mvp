@@ -1057,6 +1057,24 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* Travel / Stays show a single panel: present it as a centered, constrained
+   list rather than a half-width card with an empty right half. */
+.inventory-grid--single {
+  display: block;
+}
+
+.inventory-grid--single > div {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Stack the panel heading above its description so the title isn't squeezed. */
+.inventory-grid .section-header {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
 .inventory-card,
 .empty-state-card {
   align-items: center;
@@ -1075,6 +1093,115 @@ textarea {
 .empty-state-card strong {
   display: block;
   margin-bottom: 6px;
+}
+
+/* Inventory card (flights / stays): title + price-anchored head, a muted meta
+   note, then a colored status chip with right-aligned actions. */
+.inventory-card {
+  display: grid;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.inventory-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.inventory-card-title {
+  min-width: 0;
+}
+
+.inventory-card-title strong {
+  margin-bottom: 4px;
+  font-size: 1.02rem;
+}
+
+.inventory-card-title p {
+  color: var(--muted);
+}
+
+.inventory-card-price {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.inventory-card-price strong {
+  margin-bottom: 2px;
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.inventory-card-price small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.inventory-card-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.inventory-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-pill::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-available {
+  background: rgba(17, 24, 39, 0.06);
+  color: var(--muted);
+}
+
+.status-saved {
+  background: rgba(31, 76, 122, 0.12);
+  color: #1f4c7a;
+}
+
+.status-confirmed {
+  background: rgba(15, 118, 110, 0.14);
+  color: var(--success);
+}
+
+.inventory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inventory-actions .ghost-button,
+.inventory-actions .secondary-button {
+  min-height: 36px;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+}
+
+.inventory-locked-note {
+  font-size: 0.8rem;
 }
 
 .inventory-meta {
