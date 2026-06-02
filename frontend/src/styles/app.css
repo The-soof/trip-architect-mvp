@@ -996,6 +996,63 @@ textarea {
   font-size: 1.6rem;
 }
 
+/* Itinerary heading stacks above the overview so the title isn't squeezed. */
+.timeline .section-header {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+/* Neighborhood card: small city label, recommended area as the title, why body. */
+.neighborhood-card .eyebrow {
+  margin-bottom: 2px;
+}
+
+.neighborhood-card strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 1.05rem;
+}
+
+/* Day card: aligned time-of-day blocks + a subtle notes footer. */
+.day-blocks {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.day-block {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+}
+
+.day-block dt {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.day-block dd {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.day-notes {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.day-notes .note-line {
+  font-size: 0.85rem;
+}
+
 .inventory-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

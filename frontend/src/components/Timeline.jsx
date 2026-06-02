@@ -15,9 +15,9 @@ export default function Timeline({ itinerary }) {
 
       <div className="neighborhood-grid">
         {itinerary.neighborhood_guidance.map((item) => (
-          <article className="mini-card" key={`${item.city}-${item.recommended_area}`}>
-            <strong>{item.city}</strong>
-            <span>{item.recommended_area}</span>
+          <article className="mini-card neighborhood-card" key={`${item.city}-${item.recommended_area}`}>
+            <p className="eyebrow">{item.city}</p>
+            <strong>{item.recommended_area}</strong>
             <p>{item.why}</p>
           </article>
         ))}
@@ -32,11 +32,24 @@ export default function Timeline({ itinerary }) {
             </div>
             <div className="timeline-content">
               <h3>{day.theme}</h3>
-              <p><strong>Morning:</strong> {day.morning}</p>
-              <p><strong>Afternoon:</strong> {day.afternoon}</p>
-              <p><strong>Evening:</strong> {day.evening}</p>
-              <p className="note-line">{day.logistics_note}</p>
-              <p className="note-line">{day.flexibility_note}</p>
+              <dl className="day-blocks">
+                <div className="day-block">
+                  <dt>Morning</dt>
+                  <dd>{day.morning}</dd>
+                </div>
+                <div className="day-block">
+                  <dt>Afternoon</dt>
+                  <dd>{day.afternoon}</dd>
+                </div>
+                <div className="day-block">
+                  <dt>Evening</dt>
+                  <dd>{day.evening}</dd>
+                </div>
+              </dl>
+              <div className="day-notes">
+                <p className="note-line">{day.logistics_note}</p>
+                <p className="note-line">{day.flexibility_note}</p>
+              </div>
             </div>
           </article>
         ))}
@@ -44,4 +57,3 @@ export default function Timeline({ itinerary }) {
     </section>
   )
 }
-
