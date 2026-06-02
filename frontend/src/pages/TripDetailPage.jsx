@@ -195,12 +195,39 @@ export default function TripDetailPage() {
     return <GlobeLoader fullscreen messages={OPTIONS_LOADER.messages} showTips title={OPTIONS_LOADER.title} />
   }
 
+  const nextSteps = [
+    { label: 'Route options generated', done: trip.options.length > 0 },
+    { label: 'Lock in your route direction', done: Boolean(trip.selected_option_id) },
+    {
+      label: 'Select your flights',
+      done: trip.confirmed_bookings.some((b) => b.booking_type === 'flight' && b.selection_state === 'confirmed'),
+    },
+    {
+      label: 'Choose your lodging stays',
+      done: trip.confirmed_bookings.some((b) => b.booking_type === 'hotel' && b.selection_state === 'confirmed'),
+    },
+  ]
+
+  const faqs = [
+    { q: 'Are these live prices?', a: 'Flight pricing is modeled as an estimate, not a live fare hold.' },
+    { q: 'How is lodging estimated?', a: "Lodging assumes each option's pacing across its stops." },
+    {
+      q: 'How are food and activities budgeted?',
+      a: 'Food and activity budgets scale with the requested budget tier and traveler count.',
+    },
+    {
+      q: 'Where do the booking links go?',
+      a: 'All booking links open live Kayak and Booking.com listings. Trip Architect does not add service fees.',
+    },
+  ]
+
   return (
     <AppShell
+      compactHeader
       title={trip.destination_candidates.join(' · ')}
       subtitle={`${trip.origin} · ${tripWindow(trip.start_date, trip.end_date)} · ${trip.status}`}
       actions={
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="trip-detail-actions">
           {!isPending && !isTripLocked && !isFlightLocked && (
             <button
               className="ghost-button"
@@ -255,7 +282,7 @@ export default function TripDetailPage() {
               value={regenerateFeedback}
             />
           </label>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div className="regenerate-actions">
             <button
               className="primary-button"
               disabled={regenerating}
@@ -308,7 +335,7 @@ export default function TripDetailPage() {
       <section className="surface-card summary-strip">
         <div>
           <p className="eyebrow">Trip brief</p>
-          <h2>{trip.trip_style}</h2>
+          <p className="summary-brief">{trip.trip_style}</p>
         </div>
         <div className="summary-metadata">
           <span>{trip.traveler_count} travelers</span>
@@ -430,28 +457,29 @@ export default function TripDetailPage() {
         </section>
       ) : null}
 
-      <section className="surface-card">
-        <div className="section-header">
-          <div>
-            <p className="eyebrow">Agent observability</p>
-            <h2>How the plan was assembled</h2>
-          </div>
-          <p>Each run distinguishes traveler input, inferred recommendations, and estimated price assumptions.</p>
+      <section className="trip-footer-grid" aria-label="Trip progress and FAQ">
+        <div className="surface-card next-steps-card">
+          <p className="eyebrow">Next steps</p>
+          <ul className="next-steps-list">
+            {nextSteps.map((step) => (
+              <li className={`next-step${step.done ? ' is-done' : ''}`} key={step.label}>
+                <span aria-hidden="true" className="next-step-check" />
+                <span>{step.label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="agent-run-list">
-          {trip.agent_runs.map((run) => (
-            <article className="mini-card" key={run.id}>
-              <strong>{run.kind}</strong>
-              <span>{run.mode}</span>
-              <p>{run.summary}</p>
-              <ul>
-                {run.steps.map((step) => (
-                  <li key={`${run.id}-${step.agent}`}>{step.agent}: {step.detail}</li>
-                ))}
-              </ul>
-            </article>
-          ))}
+        <div className="surface-card faq-card">
+          <p className="eyebrow">FAQ</p>
+          <dl className="faq-list">
+            {faqs.map((faq) => (
+              <div className="faq-item" key={faq.q}>
+                <dt>{faq.q}</dt>
+                <dd>{faq.a}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
         </>
