@@ -691,7 +691,7 @@ textarea {
 
 .options-grid {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  margin: 24px 0;
+  margin: 24px 0 0;
 }
 
 .trip-tab-bar {
@@ -736,24 +736,31 @@ textarea {
     0 0 0 3px rgba(18, 48, 82, 0.08);
 }
 
-.option-card.locked::after {
-  content: 'Locked route';
-  position: absolute;
-  top: 18px;
-  right: 18px;
+/* Locked badge lives in the header beside the fit pill (was an absolutely
+   positioned ::after that overlapped the score pill). */
+.option-header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.locked-badge {
   border-radius: 999px;
-  padding: 7px 11px;
+  padding: 6px 11px;
   background: rgba(18, 48, 82, 0.1);
   color: var(--accent-strong);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .option-card.muted {
-  opacity: 0.5;
-  filter: saturate(0.7);
+  opacity: 0.62;
+  filter: saturate(0.78);
 }
 
 .option-header {
@@ -779,8 +786,45 @@ textarea {
   gap: 10px;
 }
 
+/* Stops read as an ordered route: stacked city/nights chips joined by arrows.
+   Each arrow is glued to the chip that follows it (.stop-step), so when the
+   route is long enough to wrap, the arrow never dangles at the end of a row. */
+.stop-list {
+  align-items: center;
+  gap: 4px;
+}
+
+.stop-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .stop-chip {
-  min-width: 108px;
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-width: 88px;
+  padding: 12px 14px;
+  border-radius: 16px;
+}
+
+.stop-chip strong {
+  font-size: 0.98rem;
+  line-height: 1.1;
+}
+
+.stop-chip span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.stop-arrow {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1;
 }
 
 .cost-bar strong,
@@ -791,10 +835,41 @@ textarea {
   font-size: 1.02rem;
 }
 
+/* Cost breakdown reads as a compact label -> value list with hairline dividers
+   (lighter than the old filled boxes). Scoped so the shared .mini-stat / strong
+   rules used elsewhere are untouched. */
 .breakdown-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.breakdown-grid .mini-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 12px;
+  padding: 9px 0;
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.breakdown-grid .mini-stat:last-child {
+  border-bottom: 0;
+}
+
+.breakdown-grid .mini-stat span {
+  display: inline;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.breakdown-grid .mini-stat strong {
+  display: inline;
+  font-size: 0.95rem;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .mini-stat {
@@ -807,6 +882,43 @@ textarea {
 .assumption-list small {
   display: block;
   color: var(--muted);
+}
+
+/* Price assumptions: one quiet shared dropdown that hugs the bottom of the last
+   option, with a clear gap before the observability section below it. */
+.assumption-disclosure {
+  margin: 12px 0 24px;
+}
+
+.assumption-disclosure summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.assumption-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.assumption-disclosure summary::before {
+  content: '▸';
+  font-size: 0.7rem;
+  transition: transform 150ms ease;
+}
+
+.assumption-disclosure[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.assumption-disclosure .assumption-list {
+  margin-top: 10px;
+  gap: 6px;
 }
 
 .tradeoff-list {

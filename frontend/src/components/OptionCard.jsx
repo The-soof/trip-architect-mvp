@@ -16,17 +16,27 @@ export default function OptionCard({
           <p className="eyebrow">Option</p>
           <h3>{option.name}</h3>
         </div>
-        <span className="score-pill">{option.fit_score}/10 fit</span>
+        <div className="option-header-meta">
+          {selectionLocked ? <span className="locked-badge">Locked route</span> : null}
+          <span className="score-pill">{option.fit_score}/10 fit</span>
+        </div>
       </div>
 
       <p>{option.summary}</p>
       <p className="option-rationale">{option.rationale}</p>
 
       <div className="stop-list">
-        {option.days_by_stop.map((stop) => (
-          <div className="stop-chip" key={`${option.id}-${stop.city}`}>
-            <strong>{stop.city}</strong>
-            <span>{stop.nights} nights</span>
+        {option.days_by_stop.map((stop, index) => (
+          <div className="stop-step" key={`${option.id}-${stop.city}`}>
+            <div className="stop-chip">
+              <strong>{stop.city}</strong>
+              <span>{stop.nights} nights</span>
+            </div>
+            {index < option.days_by_stop.length - 1 ? (
+              <span aria-hidden="true" className="stop-arrow">
+                →
+              </span>
+            ) : null}
           </div>
         ))}
       </div>
@@ -80,12 +90,6 @@ export default function OptionCard({
         </div>
       ) : null}
 
-      <div className="assumption-list">
-        {option.price_assumptions.map((assumption) => (
-          <small key={assumption}>{assumption}</small>
-        ))}
-      </div>
-
       <button
         className="secondary-button"
         disabled={selecting || selectionDisabled}
@@ -102,6 +106,7 @@ export default function OptionCard({
                 ? selectionLabel || 'Locked'
                 : 'Choose this trip'}
       </button>
+
     </article>
   )
 }

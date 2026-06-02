@@ -365,6 +365,17 @@ export default function TripDetailPage() {
             ))}
           </section>
 
+          {trip.options.length ? (
+            <details className="assumption-disclosure" aria-label="Estimate assumptions">
+              <summary>Assumptions (3)</summary>
+              <div className="assumption-list">
+                <small>Flight pricing is modeled as an estimate, not a live fare hold.</small>
+                <small>Lodging assumes each option&apos;s pacing across its stops.</small>
+                <small>Food and activity budgets scale with the requested budget tier and traveler count.</small>
+              </div>
+            </details>
+          ) : null}
+
           {!trip.options.length && !isPlanningOptions && trip.status !== 'failed' ? (
             <section className="surface-card planner-notice">
               <p className="eyebrow">Trip options</p>
