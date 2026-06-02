@@ -1204,6 +1204,24 @@ textarea {
   font-size: 0.8rem;
 }
 
+/* Mobile: stack the card head (so the title doesn't squeeze against the price)
+   and let the actions wrap into a compact row instead of full-width slabs. */
+@media (max-width: 560px) {
+  .inventory-card-head {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .inventory-card-price {
+    text-align: left;
+  }
+
+  .inventory-actions .ghost-button,
+  .inventory-actions .secondary-button {
+    width: auto;
+  }
+}
+
 .inventory-meta {
   display: grid;
   justify-items: end;
