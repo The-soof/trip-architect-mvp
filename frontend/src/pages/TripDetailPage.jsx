@@ -338,10 +338,14 @@ export default function TripDetailPage() {
           <p className="summary-brief">{trip.trip_style}</p>
         </div>
         <div className="summary-metadata">
-          <span>{trip.traveler_count} travelers</span>
-          <span>{trip.budget_range || 'Flexible budget'}</span>
-          <span>{trip.planning_mode} planning mode</span>
-          <span>{trip.confirmed_bookings.length} saved bookings</span>
+          <div className="summary-stat">
+            <span>Travelers</span>
+            <strong>{trip.traveler_count}</strong>
+          </div>
+          <div className="summary-stat">
+            <span>Budget</span>
+            <strong>{trip.budget_range || 'Flexible'}</strong>
+          </div>
         </div>
       </section>
 
