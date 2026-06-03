@@ -9,7 +9,7 @@ class TripCreateRequest(BaseModel):
     origin: str = Field(min_length=2, max_length=120)
     start_date: date
     end_date: date
-    destination_candidates: list[str] = Field(min_length=1, max_length=6)
+    destination_candidates: list[str] = Field(min_length=1, max_length=8)
     trip_style: str = Field(min_length=12, max_length=1000)
     budget_range: str | None = Field(default=None, max_length=80)
     traveler_count: int = Field(default=1, ge=1, le=12)

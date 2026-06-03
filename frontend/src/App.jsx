@@ -14,7 +14,7 @@ const EMPTY_DASHBOARD = { recent_trips: [], saved_trips: [] }
 function ProtectedRoute({ children }) {
   const { token } = useSession()
   if (!token) {
-    return <Navigate replace to="/" />
+    return <Navigate replace to="/sign-in" />
   }
   return children
 }

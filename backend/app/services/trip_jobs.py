@@ -162,7 +162,7 @@ def _run_trip_options_generation(trip_id: str) -> None:
                 if cleaned_city and cleaned_city not in planned_cities:
                     planned_cities.append(cleaned_city)
         if planned_cities:
-            trip.destination_candidates = planned_cities
+            trip.destination_candidates = planned_cities[:8]
 
         trip.planning_mode = planning.mode
         trip.brief_summary = planning.brief_summary

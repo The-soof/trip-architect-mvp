@@ -1,7 +1,8 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useSession } from '../hooks/useSession.jsx'
 
 export default function AppShell({ title, subtitle, actions, children, compactHeader = false }) {
+  const navigate = useNavigate()
   const { user, clearSession } = useSession()
 
   return (
@@ -33,8 +34,12 @@ export default function AppShell({ title, subtitle, actions, children, compactHe
             <strong>{user?.full_name || 'Traveler'}</strong>
             {user?.email ? <span>{user.email}</span> : null}
           </div>
-          <button className="ghost-button topbar-logout" onClick={clearSession} type="button">
-            Sign out
+          <button
+            className="ghost-button topbar-logout"
+            onClick={user ? clearSession : () => navigate('/sign-in')}
+            type="button"
+          >
+            {user ? 'Sign out' : 'Sign in'}
           </button>
         </div>
       </header>
