@@ -91,7 +91,7 @@ class GeminiOptionSeed(BaseModel):
     days_by_stop: list[GeminiDayStopPayload] = Field(default_factory=list)
     pace_label: str
     budget_confidence: str = "medium"
-    return_city: str = Field(description="The return destination city or airport code (e.g. 'SFO', 'BOS') where the traveler ends their trip. Return the origin code/city if they return back to the origin (round-trip), a different city/code if they return elsewhere, or 'none' if they explicitly request a one-way trip that ends at the final destination without returning to the origin or any other return city.")
+    return_city: str = Field(description="The return destination city or airport code where the traveler ends their trip or continues their journey. Carefully analyze the brief for any subtle details indicating a final destination, secondary travel plan, or next stop after this trip (e.g., meeting others, moving to another city, or joining family). If any such transition city is mentioned, return that city's name or code as the return destination instead of the last stop in the candidate route. If they return to the origin, return the origin code. If it is a one-way trip ending at the final candidate stop with no other future location mentioned, return 'none'.")
     fit_score: float = Field(description="A fit score float between 0.0 and 10.0 representing how well this option matches the traveler's request, where 10.0 is a perfect fit.")
 
 
@@ -880,8 +880,9 @@ class TripPlanner:
             "If the traveler explicitly requests to change their budget category, traveler count, or pace in the brief or regeneration notes, "
             "return the updated values in 'updated_budget_range', 'updated_traveler_count', or 'updated_pace_preference'. Otherwise keep them null. "
             "Each option must include: name, summary, rationale, tradeoffs, destination_order, days_by_stop, pace_label, budget_confidence, "
-            "return_city (the city/airport code where the traveler ends their trip. Return the origin code if they return back to the origin (round-trip), "
-            "a different city if they end/return elsewhere, or 'none' if they explicitly request a one-way trip ending at their final destination), "
+            "return_city (the city/airport code where the traveler ends their trip or continues their journey next. If they return to the origin, return the origin code. "
+            "If they specify transitioning to any other city afterwards, return that transition city's name or code. "
+            "Return 'none' only if it is a pure one-way trip ending at the final candidate stop with no other future destination mentioned in the brief), "
             "fit_score (a float between 0.0 and 10.0, where 10.0 is a perfect fit). "
             "While route options should generally be based on the provided candidate destinations, you may swap, "
             "add, or introduce other destinations if the traveler explicitly requests them in their trip brief or "
