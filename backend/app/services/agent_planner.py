@@ -91,7 +91,7 @@ class GeminiOptionSeed(BaseModel):
     days_by_stop: list[GeminiDayStopPayload] = Field(default_factory=list)
     pace_label: str
     budget_confidence: str = "medium"
-    fit_score: float
+    fit_score: float = Field(description="A fit score float between 0.0 and 10.0 representing how well this option matches the traveler's request, where 10.0 is a perfect fit.")
 
 
 class GeminiTripOptionsPayload(BaseModel):
@@ -826,7 +826,7 @@ class TripPlanner:
             "interests, and pacing preferences. "
             "If the traveler explicitly requests to change their budget category, traveler count, or pace in the brief or regeneration notes, "
             "return the updated values in 'updated_budget_range', 'updated_traveler_count', or 'updated_pace_preference'. Otherwise keep them null. "
-            "Each option must include: name, summary, rationale, tradeoffs, destination_order, days_by_stop, pace_label, budget_confidence, fit_score. "
+            "Each option must include: name, summary, rationale, tradeoffs, destination_order, days_by_stop, pace_label, budget_confidence, fit_score (a float between 0.0 and 10.0, where 10.0 is a perfect fit). "
             "While route options should generally be based on the provided candidate destinations, you may swap, "
             "add, or introduce other destinations if the traveler explicitly requests them in their trip brief or "
             "regeneration notes. Make days_by_stop feasible for the exact trip length. "

@@ -210,6 +210,7 @@ export default function TripDetailPage() {
   const nextSteps = [
     { label: 'Route options generated', done: trip.options.length > 0 },
     { label: 'Lock in your route direction', done: Boolean(trip.selected_option_id) },
+    { label: 'Itinerary generated', done: Boolean(itinerary) },
     {
       label: 'Select your flights',
       done: trip.confirmed_bookings.some((b) => b.booking_type === 'flight' && b.selection_state === 'confirmed'),

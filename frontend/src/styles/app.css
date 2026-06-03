@@ -1015,6 +1015,15 @@ textarea {
   min-width: 0;
 }
 
+/* Promote the "Trip brief" label so it leads the panel instead of blending in. */
+.summary-brief-wrapper .eyebrow {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--accent-strong);
+  margin-bottom: 8px;
+}
+
 .summary-brief-body {
   display: flex;
   align-items: baseline;
