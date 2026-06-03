@@ -975,6 +975,7 @@ class TripPlanner:
             "Use Layer 1 Tavily research plus Layer 2 Google Places facts to produce a useful, travelable day-by-day itinerary. "
             "Only mention specific named venues when they appear in the Google Places layer. "
             "Preserve slack on arrival and transfer days, and surface timing cautions when opening-hours context suggests them. "
+            "Ensure all generated descriptions and notes are diverse, detailed, natural, and completely free of repetitive language or infinite loops. "
             f"Trip style: {payload.trip_style}. Route: {selected_option['destination_order']}. "
             f"Day allocation: {selected_option['days_by_stop']}. "
             f"Layer 1 Tavily research: {json.dumps(tavily_results, ensure_ascii=True)}. "
@@ -995,7 +996,7 @@ class TripPlanner:
             )
         )
         prompt = self._build_itinerary_prompt(payload, selected_option, tavily_results, venue_places, hotel_places)
-        structured = _generate_structured_with_gemini(self.settings, prompt, DeepItineraryPayload, temperature=0.2)
+        structured = _generate_structured_with_gemini(self.settings, prompt, DeepItineraryPayload, temperature=0.3)
         hotels = _build_hotel_options(payload, selected_option, hotel_places)
         flights = _build_flight_options(payload, selected_option)
         sources = _dedupe_sources(
