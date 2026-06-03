@@ -133,6 +133,8 @@ def build_kayak_flights_link(
     origin_code = _city_to_iata(origin)
     dest_code = _city_to_iata(destination)
     adults_segment = f"/{adults}adults" if adults > 1 else ""
+    if not return_date:
+        return f"https://www.kayak.com/flights/{origin_code}-{dest_code}/{depart_date}{adults_segment}"
     return (
         f"https://www.kayak.com/flights/{origin_code}-{dest_code}"
         f"/{depart_date}/{return_date}{adults_segment}"

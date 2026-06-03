@@ -91,6 +91,7 @@ class GeminiOptionSeed(BaseModel):
     days_by_stop: list[GeminiDayStopPayload] = Field(default_factory=list)
     pace_label: str
     budget_confidence: str = "medium"
+    return_city: str = Field(description="The return destination city or airport code (e.g. 'SFO', 'BOS') where the traveler ends their trip. Return the origin code/city if they return back to the origin (round-trip), a different city/code if they return elsewhere, or 'none' if they explicitly request a one-way trip that ends at the final destination without returning to the origin or any other return city.")
     fit_score: float = Field(description="A fit score float between 0.0 and 10.0 representing how well this option matches the traveler's request, where 10.0 is a perfect fit.")
 
 
@@ -592,38 +593,89 @@ def _build_flight_options(payload: TripCreateRequest, selected_option: dict[str,
     allocations = selected_option["days_by_stop"]
     first_stop = str(allocations[0]["city"])
     last_stop = str(allocations[-1]["city"])
+
+    return_city = selected_option.get("return_city")
+    if return_city:
+        return_city_clean = return_city.strip().lower()
+    else:
+        return_city_clean = ""
+
+    origin_clean = payload.origin.strip().lower()
+
+    # Check if one-way
+    is_one_way = (return_city_clean == "none")
+    # Check if returning to a different city (open-jaw to another city)
+    is_different_return = (return_city_clean and return_city_clean != "none" and return_city_clean != origin_clean)
+
+    if is_one_way:
+        route_summary_1 = f"{payload.origin} → {first_stop} (One-way)"
+        booking_url_1 = build_kayak_flights_link(
+            payload.origin,
+            first_stop,
+            payload.start_date.isoformat(),
+            return_date="",
+            adults=payload.traveler_count,
+        )
+        match_reason_1 = f"Searches the outbound flight to {first_stop}. Ideal for a one-way trip ending at {last_stop}."
+
+        route_summary_2 = f"{payload.origin} → {first_stop} one-way with regional transfers in between"
+        booking_url_2 = booking_url_1
+        match_reason_2 = "Outbound flight option for travelers who plan to stay at their destination or handle their return journey separately."
+    elif is_different_return:
+        return_city_display = return_city.strip()
+        if len(return_city_display) == 3:
+            return_city_display = return_city_display.upper()
+        else:
+            return_city_display = return_city_display.title()
+
+        route_summary_1 = f"{payload.origin} → {first_stop} / {last_stop} → {return_city_display}"
+        booking_url_1 = build_kayak_flights_link(
+            payload.origin,
+            first_stop,
+            payload.start_date.isoformat(),
+            return_date="",
+            adults=payload.traveler_count,
+        )
+        match_reason_1 = f"Searches outbound flight from {payload.origin} to {first_stop}. The return leg from {last_stop} to {return_city_display} can be booked separately."
+
+        route_summary_2 = f"{payload.origin} → {first_stop} outbound flight (return to {return_city_display} booked separately)"
+        booking_url_2 = booking_url_1
+        match_reason_2 = f"Simplest outbound route. Perfect if you return to {return_city_display} at the end of the multi-stop trip."
+    else:
+        route_summary_1 = f"{payload.origin} → {first_stop} / {last_stop} → {payload.origin}"
+        booking_url_1 = build_kayak_flights_link(
+            payload.origin,
+            first_stop,
+            payload.start_date.isoformat(),
+            payload.end_date.isoformat(),
+            adults=payload.traveler_count,
+        )
+        match_reason_1 = "Keeps the route aligned with the chosen stop order and avoids unnecessary backtracking."
+
+        route_summary_2 = f"{payload.origin} → {first_stop} round-trip with regional transfers in between"
+        booking_url_2 = booking_url_1
+        match_reason_2 = "Useful if the traveler prefers one primary arrival airport and simpler ticket management."
+
     return [
         {
             "carrier": "Open-jaw balance",
-            "route_summary": f"{payload.origin} → {first_stop} / {last_stop} → {payload.origin}",
+            "route_summary": route_summary_1,
             "price": max(420, int(selected_option["estimated_total_min"] * 0.23)),
             "stops": max(0, len(allocations) - 1),
             "comfort_label": "Best overall fit",
             "source_name": "Kayak",
-            "booking_url": build_kayak_flights_link(
-                payload.origin,
-                first_stop,
-                payload.start_date.isoformat(),
-                payload.end_date.isoformat(),
-                adults=payload.traveler_count,
-            ),
-            "match_reason": "Keeps the route aligned with the chosen stop order and avoids unnecessary backtracking.",
+            "booking_url": booking_url_1,
+            "match_reason": match_reason_1,
         },
         {
             "carrier": "Simplest timing",
-            "route_summary": f"{payload.origin} → {first_stop} round-trip with regional transfers in between",
+            "route_summary": route_summary_2,
             "price": max(390, int(selected_option["estimated_total_min"] * 0.2)),
             "stops": 1,
             "comfort_label": "Lowest friction",
             "source_name": "Kayak",
-            "booking_url": build_kayak_flights_link(
-                payload.origin,
-                first_stop,
-                payload.start_date.isoformat(),
-                payload.end_date.isoformat(),
-                adults=payload.traveler_count,
-            ),
-            "match_reason": "Useful if the traveler prefers one primary arrival airport and simpler ticket management.",
+            "booking_url": booking_url_2,
+            "match_reason": match_reason_2,
         },
     ]
 
@@ -704,6 +756,7 @@ class TripPlanner:
                     "estimated_total_min": cost_min,
                     "estimated_total_max": cost_max,
                     "budget_confidence": "medium",
+                    "return_city": payload.origin,
                     "fit_score": round(fit_score - (rank - 1) * 0.2, 1),
                 }
             )
@@ -826,7 +879,10 @@ class TripPlanner:
             "interests, and pacing preferences. "
             "If the traveler explicitly requests to change their budget category, traveler count, or pace in the brief or regeneration notes, "
             "return the updated values in 'updated_budget_range', 'updated_traveler_count', or 'updated_pace_preference'. Otherwise keep them null. "
-            "Each option must include: name, summary, rationale, tradeoffs, destination_order, days_by_stop, pace_label, budget_confidence, fit_score (a float between 0.0 and 10.0, where 10.0 is a perfect fit). "
+            "Each option must include: name, summary, rationale, tradeoffs, destination_order, days_by_stop, pace_label, budget_confidence, "
+            "return_city (the city/airport code where the traveler ends their trip. Return the origin code if they return back to the origin (round-trip), "
+            "a different city if they end/return elsewhere, or 'none' if they explicitly request a one-way trip ending at their final destination), "
+            "fit_score (a float between 0.0 and 10.0, where 10.0 is a perfect fit). "
             "While route options should generally be based on the provided candidate destinations, you may swap, "
             "add, or introduce other destinations if the traveler explicitly requests them in their trip brief or "
             "regeneration notes. Make days_by_stop feasible for the exact trip length. "

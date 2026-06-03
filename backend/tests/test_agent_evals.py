@@ -198,6 +198,7 @@ def test_gemini_option_generation_normalizes_structured_output(monkeypatch) -> N
                         "days_by_stop": [{"city": "Barcelona", "nights": 10, "start_day": 1, "end_day": 10}],
                         "pace_label": "Relaxed",
                         "budget_confidence": "medium",
+                        "return_city": "SFO",
                         "fit_score": 9.2,
                     }
                 ],

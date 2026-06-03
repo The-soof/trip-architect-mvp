@@ -49,5 +49,10 @@ def ensure_runtime_schema(engine: Engine) -> None:
             if "brief_summary" not in trip_columns:
                 connection.execute(text("ALTER TABLE trip_requests ADD COLUMN brief_summary TEXT"))
 
+        if "trip_options" in existing_tables:
+            option_columns = {column["name"] for column in inspector.get_columns("trip_options")}
+            if "return_city" not in option_columns:
+                connection.execute(text("ALTER TABLE trip_options ADD COLUMN return_city VARCHAR(120)"))
+
         if "confirmed_bookings" not in existing_tables:
             ConfirmedBooking.__table__.create(bind=connection, checkfirst=True)

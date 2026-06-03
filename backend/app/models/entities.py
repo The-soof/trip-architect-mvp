@@ -95,6 +95,7 @@ class TripOption(Base):
     budget_confidence: Mapped[str] = mapped_column(String(32), default="medium")
     fit_score: Mapped[float] = mapped_column(Float, default=0.0)
     is_selected: Mapped[bool] = mapped_column(Boolean, default=False)
+    return_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     trip_request: Mapped[TripRequest] = relationship(back_populates="options")

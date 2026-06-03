@@ -94,6 +94,7 @@ class TripOptionRead(BaseModel):
     price_assumptions: list[str]
     warning_flags: list[str]
     is_selected: bool
+    return_city: str | None = None
     created_at: datetime
 
 

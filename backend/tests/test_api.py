@@ -392,6 +392,7 @@ def test_trip_planning_bounds_gemini_enum_text(client: TestClient, monkeypatch) 
                     "estimated_total_min": 2400,
                     "estimated_total_max": 3600,
                     "budget_confidence": "Medium confidence because June hotel pricing can swing by neighborhood",
+                    "return_city": "SFO",
                     "fit_score": 9.1,
                 }
             ],
@@ -424,3 +425,62 @@ def test_trip_create_returns_pending_workspace_when_background_job_is_not_run(
     assert trip["status"] == "planning"
     assert trip["options"] == []
     assert trip["agent_runs"][0]["status"] == "running"
+
+
+def test_build_flight_options_different_return_and_one_way() -> None:
+    from app.services.agent_planner import _build_flight_options
+    from app.schemas.trip import TripCreateRequest
+    from datetime import date
+
+    payload = TripCreateRequest(
+        origin="SFO",
+        start_date=date(2026, 8, 10),
+        end_date=date(2026, 8, 20),
+        destination_candidates=["Barcelona", "Split"],
+        trip_style="Vacation planning",
+        budget_range="Mid-range",
+        traveler_count=2,
+        pace_preference="Balanced",
+    )
+
+    # 1. Test standard round-trip to origin
+    option_rt = {
+        "days_by_stop": [
+            {"city": "Barcelona", "nights": 5},
+            {"city": "Split", "nights": 5},
+        ],
+        "estimated_total_min": 2000,
+        "return_city": "SFO",
+    }
+    flights_rt = _build_flight_options(payload, option_rt)
+    assert flights_rt[0]["route_summary"] == "SFO → Barcelona / Split → SFO"
+    assert "2026-08-20" in flights_rt[0]["booking_url"]  # Return date is present
+
+    # 2. Test one-way trip
+    option_ow = {
+        "days_by_stop": [
+            {"city": "Barcelona", "nights": 5},
+            {"city": "Split", "nights": 5},
+        ],
+        "estimated_total_min": 2000,
+        "return_city": "none",
+    }
+    flights_ow = _build_flight_options(payload, option_ow)
+    assert flights_ow[0]["route_summary"] == "SFO → Barcelona (One-way)"
+    assert flights_ow[1]["route_summary"] == "SFO → Barcelona one-way with regional transfers in between"
+    assert "2026-08-20" not in flights_ow[0]["booking_url"]  # No return date for one-way flight
+
+    # 3. Test open-jaw returning to a different city (e.g. BOS)
+    option_oj = {
+        "days_by_stop": [
+            {"city": "Barcelona", "nights": 5},
+            {"city": "Split", "nights": 5},
+        ],
+        "estimated_total_min": 2000,
+        "return_city": "BOS",
+    }
+    flights_oj = _build_flight_options(payload, option_oj)
+    assert flights_oj[0]["route_summary"] == "SFO → Barcelona / Split → BOS"
+    assert flights_oj[1]["route_summary"] == "SFO → Barcelona outbound flight (return to BOS booked separately)"
+    assert "2026-08-20" not in flights_oj[0]["booking_url"]  # No return date because return is separate
+

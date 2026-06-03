@@ -151,6 +151,7 @@ def _run_trip_options_generation(trip_id: str) -> None:
                     estimated_total_max=option["estimated_total_max"],
                     budget_confidence=_bounded_confidence(option["budget_confidence"]),
                     fit_score=option["fit_score"],
+                    return_city=_bounded_text(option.get("return_city"), 120, "Return city") if option.get("return_city") else None,
                 )
             )
 
@@ -224,6 +225,7 @@ def _run_itinerary_generation(trip_id: str, option_id: str) -> None:
                 "days_by_stop": selected_option.days_by_stop,
                 "pace_label": selected_option.pace_label,
                 "estimated_total_min": selected_option.estimated_total_min,
+                "return_city": selected_option.return_city,
             },
         )
         run = _latest_agent_run(trip, "itinerary")
