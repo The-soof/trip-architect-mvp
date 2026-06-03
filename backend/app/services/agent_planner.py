@@ -97,6 +97,9 @@ class GeminiOptionSeed(BaseModel):
 class GeminiTripOptionsPayload(BaseModel):
     planning_summary: str
     brief_summary: str = Field(description="A concise, 2-to-3 line summary of the traveler's core goals, interests, and vibes, ignoring any appended system notes or repeated regeneration instructions.")
+    updated_budget_range: str | None = Field(default=None, description="If the traveler requests a change to their budget category in the notes/brief, return the updated category (one of: 'Budget', 'Mid-range', 'Luxury'). Otherwise return null.")
+    updated_pace_preference: str | None = Field(default=None, description="If the traveler requests a change to their pace in the notes/brief, return the updated pace (one of: 'Slow', 'Balanced', 'Fast-paced'). Otherwise return null.")
+    updated_traveler_count: int | None = Field(default=None, description="If the traveler requests a change to the traveler count in the notes/brief, return the updated integer count. Otherwise return null.")
     options: list[GeminiOptionSeed] = Field(default_factory=list)
 
 
@@ -147,6 +150,9 @@ class PlanningArtifacts:
     options: list[dict[str, Any]]
     sources: list[dict[str, Any]]
     steps: list[dict[str, Any]]
+    updated_budget_range: str | None = None
+    updated_pace_preference: str | None = None
+    updated_traveler_count: int | None = None
     fallback_reason: str | None = None
 
 
@@ -730,6 +736,9 @@ class TripPlanner:
             options=options,
             sources=_planning_sources(candidates, "mock"),
             steps=steps,
+            updated_budget_range=None,
+            updated_pace_preference=None,
+            updated_traveler_count=None,
             fallback_reason=fallback_reason,
         )
 
@@ -812,11 +821,11 @@ class TripPlanner:
         trip_days = _trip_length(payload)
         prompt = (
             "You are Trip Architect's trip-options planner. Return only valid JSON. "
-            "Generate 4 to 6 realistic route options using only the user's trip brief, not web search. "
+            "Generate 4 to 6 realistic route options using the traveler's trip brief and any regeneration notes. "
             "Also generate a concise, 2-to-3 line summary ('brief_summary') of the traveler's core goals, "
-            "interests, and pacing preferences (e.g. 'Two 19-year-olds looking for a fun week-long duo trip "
-            "with nightlife, before a family stay in Istanbul. Wants to avoid long travel times.'). "
-            "Ignore any appended system notes or repeated regeneration instructions in the summary. "
+            "interests, and pacing preferences. "
+            "If the traveler explicitly requests to change their budget category, traveler count, or pace in the brief or regeneration notes, "
+            "return the updated values in 'updated_budget_range', 'updated_traveler_count', or 'updated_pace_preference'. Otherwise keep them null. "
             "Each option must include: name, summary, rationale, tradeoffs, destination_order, days_by_stop, pace_label, budget_confidence, fit_score. "
             "While route options should generally be based on the provided candidate destinations, you may swap, "
             "add, or introduce other destinations if the traveler explicitly requests them in their trip brief or "
@@ -865,6 +874,9 @@ class TripPlanner:
                 {"agent": "gemini-planner", "status": "completed", "detail": "Generated structured trip options with Gemini 2.5 Flash."},
                 {"agent": "budget-agent", "status": "completed", "detail": "Applied local cost and pacing estimates for each returned route."},
             ],
+            updated_budget_range=structured.updated_budget_range,
+            updated_pace_preference=structured.updated_pace_preference,
+            updated_traveler_count=structured.updated_traveler_count,
         )
 
     def _build_places_research_plan(

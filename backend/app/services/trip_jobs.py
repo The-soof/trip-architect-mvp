@@ -166,6 +166,12 @@ def _run_trip_options_generation(trip_id: str) -> None:
 
         trip.planning_mode = planning.mode
         trip.brief_summary = planning.brief_summary
+        if planning.updated_budget_range:
+            trip.budget_range = planning.updated_budget_range
+        if planning.updated_pace_preference:
+            trip.pace_preference = planning.updated_pace_preference
+        if planning.updated_traveler_count is not None:
+            trip.traveler_count = planning.updated_traveler_count
         trip.status = "planned"
 
         if run is not None:
