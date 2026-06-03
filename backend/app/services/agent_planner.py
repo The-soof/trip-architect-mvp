@@ -414,8 +414,29 @@ def _generate_structured_with_gemini(
     temperature: float = 0.2,
 ) -> StructuredPayloadT:
     from google import genai
+    from google.genai import types
 
     client = genai.Client(api_key=settings.gemini_api_key)
+
+    safety_settings = [
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+            threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        ),
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+            threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        ),
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+            threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        ),
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+            threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        ),
+    ]
+
     response = client.models.generate_content(
         model=settings.gemini_model,
         contents=prompt,
@@ -424,6 +445,7 @@ def _generate_structured_with_gemini(
             "response_mime_type": "application/json",
             "response_schema": schema,
             "max_output_tokens": 16384,
+            "safety_settings": safety_settings,
         },
     )
     return schema.model_validate_json(_message_text_from_response(response))
