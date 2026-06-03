@@ -23,6 +23,21 @@ function getBriefDetails(text) {
   return { originalBrief, regenNotes }
 }
 
+function getCityDisplay(city) {
+  if (!city) return ''
+  const trimmed = city.trim()
+  if (trimmed.length === 3) return trimmed.toUpperCase()
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
+
+function getReturnDisplay(city) {
+  if (!city) return 'Flexible'
+  const trimmed = city.trim()
+  if (trimmed.toLowerCase() === 'none') return 'One-way'
+  if (trimmed.length === 3) return trimmed.toUpperCase()
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
+
 export default function TripDetailPage() {
   const { tripId } = useParams()
   const { token } = useSession()
@@ -377,6 +392,14 @@ export default function TripDetailPage() {
           )}
         </div>
         <div className="summary-metadata">
+          <div className="summary-stat">
+            <span>Origin</span>
+            <strong>{getCityDisplay(trip.origin)}</strong>
+          </div>
+          <div className="summary-stat">
+            <span>Return</span>
+            <strong>{getReturnDisplay(selectedOption?.return_city || trip.options[0]?.return_city)}</strong>
+          </div>
           <div className="summary-stat">
             <span>Travelers</span>
             <strong>{trip.traveler_count}</strong>
