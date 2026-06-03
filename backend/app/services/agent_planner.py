@@ -440,14 +440,25 @@ def _generate_structured_with_gemini(
     response = client.models.generate_content(
         model=settings.gemini_model,
         contents=prompt,
-        config={
-            "temperature": temperature,
-            "response_mime_type": "application/json",
-            "response_schema": schema,
-            "max_output_tokens": 16384,
-            "safety_settings": safety_settings,
-        },
+        config=types.GenerateContentConfig(
+            temperature=temperature,
+            response_mime_type="application/json",
+            response_schema=schema,
+            max_output_tokens=16384,
+            safety_settings=safety_settings,
+            thinking_config=types.ThinkingConfig(
+                thinking_budget=0
+            ),
+        ),
     )
+    if response.candidates:
+        candidate = response.candidates[0]
+        finish_reason = getattr(candidate, "finish_reason", None)
+        if finish_reason:
+            reason_str = str(finish_reason).upper()
+            if "STOP" not in reason_str:
+                raise ValueError(f"Gemini generation stopped prematurely. Finish reason: {finish_reason}.")
+
     return schema.model_validate_json(_message_text_from_response(response))
 
 
