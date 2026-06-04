@@ -915,7 +915,7 @@ class TripPlanner:
         trip_days = _trip_length(payload)
         prompt = (
             "You are Trip Architect's trip-options planner. Return only valid JSON. "
-            "Generate 4 to 6 realistic route options using the traveler's trip brief and any regeneration notes. "
+            "Generate exactly 4 to 6 distinct and realistic route options using the traveler's trip brief and any regeneration notes. "
             "Also generate a concise, 2-to-3 line summary ('brief_summary') of the traveler's core goals, "
             "interests, and pacing preferences. "
             "If the traveler explicitly requests to change their budget category, traveler count, or pace in the brief or regeneration notes, "
@@ -925,11 +925,9 @@ class TripPlanner:
             "If they specify transitioning to any other city afterwards, return that transition city's name or code. "
             "Return 'none' only if it is a pure one-way trip ending at the final candidate stop with no other future destination mentioned in the brief), "
             "fit_score (a float between 0.0 and 10.0, where 10.0 is a perfect fit). "
-            "While route options should generally be based on the provided candidate destinations, you may swap, "
-            "add, or introduce other destinations if the traveler explicitly requests them in their trip brief or "
-            "regeneration notes. Make days_by_stop feasible for the exact trip length. "
-            "Be decisive, concrete, and avoid duplicate route orders. "
-            "If the traveler specifies a target number of stops, destinations, or cities in their trip brief or regeneration notes (e.g., '3 stops', '2 stops', 'fewer stops'), you must strictly respect this request. For example, if they request a 3-stop trip, generate options that each contain exactly 3 stops. "
+            "You must construct all route options strictly using only the provided candidate destinations. Do NOT swap, add, or introduce any new destinations/cities (e.g., swap one spanish city for another unprompted. If user gives a broad location, like spain for example, you may narrow and use best judgement to select a city of your discretion.) unless the traveler explicitly requests a specific new destination by name in their trip brief or regeneration notes. Make days_by_stop feasible for the exact trip length. "
+            "Be decisive, concrete, and avoid duplicate route orders. Make sure each route option is a unique combination or order. "
+            "If the traveler specifies a target number of stops, destinations, or cities in their trip brief or regeneration notes (e.g., 'at least 3 stops', 'exactly 2 stops', 'fewer stops'), you must strictly respect this request. For example, if they request 'at least 3 stops', ensure every single option you generate has at least 3 stops. "
             f"Origin: {payload.origin}. Dates: {payload.start_date} to {payload.end_date} ({trip_days} nights). "
             f"Candidate destinations: {', '.join(payload.destination_candidates)}. "
             f"Trip style: {payload.trip_style}. Budget: {payload.budget_range or 'not specified'}. "
