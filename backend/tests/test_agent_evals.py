@@ -180,7 +180,7 @@ def test_agent_eval_itinerary_and_inventory_quality() -> None:
 def test_gemini_option_generation_normalizes_structured_output(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 
-    def fake_generate_structured(settings, prompt, schema, temperature=0.2):
+    def fake_generate_structured(settings, prompt, schema, temperature=0.2, **kwargs):
         captured["prompt"] = prompt
         captured["schema"] = schema
         captured["temperature"] = temperature

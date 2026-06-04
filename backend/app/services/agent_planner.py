@@ -412,6 +412,7 @@ def _generate_structured_with_gemini(
     schema: type[StructuredPayloadT],
     *,
     temperature: float = 0.2,
+    thinking_budget: int = 0,
 ) -> StructuredPayloadT:
     from google import genai
     from google.genai import types
@@ -437,19 +438,26 @@ def _generate_structured_with_gemini(
         ),
     ]
 
+    config_args = {
+        "temperature": temperature,
+        "response_mime_type": "application/json",
+        "response_schema": schema,
+        "max_output_tokens": 16384,
+        "safety_settings": safety_settings,
+    }
+    if thinking_budget > 0:
+        config_args["thinking_config"] = types.ThinkingConfig(
+            thinking_budget=thinking_budget
+        )
+    else:
+        config_args["thinking_config"] = types.ThinkingConfig(
+            thinking_budget=0
+        )
+
     response = client.models.generate_content(
         model=settings.gemini_model,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=temperature,
-            response_mime_type="application/json",
-            response_schema=schema,
-            max_output_tokens=16384,
-            safety_settings=safety_settings,
-            thinking_config=types.ThinkingConfig(
-                thinking_budget=0
-            ),
-        ),
+        config=types.GenerateContentConfig(**config_args),
     )
     if response.candidates:
         candidate = response.candidates[0]
@@ -921,12 +929,19 @@ class TripPlanner:
             "add, or introduce other destinations if the traveler explicitly requests them in their trip brief or "
             "regeneration notes. Make days_by_stop feasible for the exact trip length. "
             "Be decisive, concrete, and avoid duplicate route orders. "
+            "If the traveler specifies a target number of stops, destinations, or cities in their trip brief or regeneration notes (e.g., '3 stops', '2 stops', 'fewer stops'), you must strictly respect this request. For example, if they request a 3-stop trip, generate options that each contain exactly 3 stops. "
             f"Origin: {payload.origin}. Dates: {payload.start_date} to {payload.end_date} ({trip_days} nights). "
             f"Candidate destinations: {', '.join(payload.destination_candidates)}. "
             f"Trip style: {payload.trip_style}. Budget: {payload.budget_range or 'not specified'}. "
             f"Travelers: {payload.traveler_count}. Pace preference: {payload.pace_preference or 'not specified'}."
         )
-        structured = _generate_structured_with_gemini(self.settings, prompt, GeminiTripOptionsPayload, temperature=0.25)
+        structured = _generate_structured_with_gemini(
+            self.settings,
+            prompt,
+            GeminiTripOptionsPayload,
+            temperature=0.25,
+            thinking_budget=2048,
+        )
         if not structured.options:
             raise ValueError("Gemini returned no trip options.")
 
@@ -983,7 +998,13 @@ class TripPlanner:
             f"Trip style: {payload.trip_style}. Route: {selected_option['destination_order']}. "
             f"Tavily layer 1 research: {json.dumps(tavily_results, ensure_ascii=True)}"
         )
-        return _generate_structured_with_gemini(self.settings, prompt, PlacesResearchPlanPayload, temperature=0.15)
+        return _generate_structured_with_gemini(
+            self.settings,
+            prompt,
+            PlacesResearchPlanPayload,
+            temperature=0.15,
+            thinking_budget=1024,
+        )
 
     def _build_itinerary_prompt(
         self,
@@ -1029,7 +1050,13 @@ class TripPlanner:
             )
         )
         prompt = self._build_itinerary_prompt(payload, selected_option, tavily_results, venue_places, hotel_places)
-        structured = _generate_structured_with_gemini(self.settings, prompt, DeepItineraryPayload, temperature=0.3)
+        structured = _generate_structured_with_gemini(
+            self.settings,
+            prompt,
+            DeepItineraryPayload,
+            temperature=0.3,
+            thinking_budget=0,
+        )
         hotels = _build_hotel_options(payload, selected_option, hotel_places)
         flights = _build_flight_options(payload, selected_option)
         sources = _dedupe_sources(
