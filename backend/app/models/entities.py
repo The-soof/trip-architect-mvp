@@ -61,6 +61,9 @@ class TripRequest(Base):
     selected_option_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     flight_selection_locked: Mapped[bool] = mapped_column(Boolean, default=False)
     locked_flight_option_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # The persona travel journey the traveler committed to. Selecting a journey
+    # locks the route (reuses flight_selection_locked) and makes other journeys read-only.
+    selected_journey_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -70,6 +73,9 @@ class TripRequest(Base):
     options: Mapped[list[TripOption]] = relationship(back_populates="trip_request", cascade="all, delete-orphan")
     itineraries: Mapped[list[Itinerary]] = relationship(back_populates="trip_request", cascade="all, delete-orphan")
     flight_options: Mapped[list[FlightOption]] = relationship(back_populates="trip_request", cascade="all, delete-orphan")
+    travel_journeys: Mapped[list[TravelJourney]] = relationship(
+        back_populates="trip_request", cascade="all, delete-orphan"
+    )
     hotel_options: Mapped[list[HotelOption]] = relationship(back_populates="trip_request", cascade="all, delete-orphan")
     agent_runs: Mapped[list[AgentRun]] = relationship(back_populates="trip_request", cascade="all, delete-orphan")
     saved_trip: Mapped[SavedTrip | None] = relationship(back_populates="trip_request", uselist=False)
@@ -188,6 +194,60 @@ class FlightOption(Base):
     match_reason: Mapped[str] = mapped_column(Text(), default="")
 
     trip_request: Mapped[TripRequest] = relationship(back_populates="flight_options")
+
+
+class TravelJourney(Base):
+    """A complete, persona-tailored door-to-door way of doing the trip.
+
+    Each journey is an ordered chain of TravelSegments (flight → ferry → car …).
+    Personas (title/persona_key) are dynamic when the Gemini layer is on and fall
+    back to a canonical set otherwise. `is_recommended` is an independent badge —
+    any persona can also be the recommended one.
+    """
+
+    __tablename__ = "travel_journeys"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    trip_request_id: Mapped[str] = mapped_column(ForeignKey("trip_requests.id"), index=True)
+    trip_option_id: Mapped[str] = mapped_column(ForeignKey("trip_options.id"), index=True)
+    persona_key: Mapped[str] = mapped_column(String(40), default="balanced")
+    title: Mapped[str] = mapped_column(String(120))
+    summary: Mapped[str] = mapped_column(Text(), default="")
+    is_recommended: Mapped[bool] = mapped_column(Boolean, default=False)
+    total_price_min: Mapped[int] = mapped_column(Integer, default=0)
+    total_price_max: Mapped[int] = mapped_column(Integer, default=0)
+    total_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fit_score: Mapped[float] = mapped_column(Float, default=0.0)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    trip_request: Mapped[TripRequest] = relationship(back_populates="travel_journeys")
+    segments: Mapped[list[TravelSegment]] = relationship(
+        back_populates="journey", cascade="all, delete-orphan", order_by="TravelSegment.order_index"
+    )
+
+
+class TravelSegment(Base):
+    """One step inside a TravelJourney — a single mode of transport between two points."""
+
+    __tablename__ = "travel_segments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    journey_id: Mapped[str] = mapped_column(ForeignKey("travel_journeys.id"), index=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    mode: Mapped[str] = mapped_column(String(20), default="flight")  # flight|ferry|train|car|transfer
+    from_label: Mapped[str] = mapped_column(String(120))
+    to_label: Mapped[str] = mapped_column(String(120))
+    depart_time: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    arrive_time: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    provider: Mapped[str] = mapped_column(String(120), default="")
+    price_estimate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deep_link: Mapped[str] = mapped_column(Text(), default="")
+    note: Mapped[str] = mapped_column(Text(), default="")
+    data_source: Mapped[str] = mapped_column(String(20), default="generator")  # serpapi|travelpayouts|generator|tavily
+
+    journey: Mapped[TravelJourney] = relationship(back_populates="segments")
 
 
 class HotelOption(Base):

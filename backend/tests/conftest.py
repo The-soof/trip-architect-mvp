@@ -13,6 +13,10 @@ os.environ["ENABLE_REAL_AGENT"] = "false"
 os.environ["GEMINI_API_KEY"] = ""
 os.environ["GOOGLE_PLACES_API_KEY"] = ""
 os.environ["TAVILY_API_KEY"] = ""
+# Keep journeys on the deterministic generator in tests — never hit live travel APIs.
+os.environ["SERPAPI_API_KEY"] = ""
+os.environ["TRAVELPAYOUTS_TOKEN"] = ""
+os.environ["TRAVELPAYOUTS_MARKER"] = ""
 
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402

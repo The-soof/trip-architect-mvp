@@ -14,6 +14,7 @@ from app.models import (
     Itinerary,
     SavedTrip,
     TravelerProfile,
+    TravelJourney,
     TripOption,
     TripRequest,
     User,
@@ -33,6 +34,7 @@ def _trip_query():
             ),
             selectinload(TripRequest.itineraries).selectinload(Itinerary.days),
             selectinload(TripRequest.flight_options),
+            selectinload(TripRequest.travel_journeys).selectinload(TravelJourney.segments),
             selectinload(TripRequest.hotel_options),
             selectinload(TripRequest.confirmed_bookings),
             selectinload(TripRequest.agent_runs),
@@ -58,6 +60,13 @@ def _raise_flight_lock_error() -> None:
     raise HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail="A flight has already been saved for this trip. Flight selection is now permanent, so routes and flight choices can no longer be changed.",
+    )
+
+
+def _raise_journey_lock_error() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="A travel journey has already been selected for this trip. The route is now locked, so journeys can no longer be changed.",
     )
 
 
@@ -204,10 +213,13 @@ def regenerate_trip(
         db.delete(itinerary)
     for flight in list(trip.flight_options):
         db.delete(flight)
+    for journey in list(trip.travel_journeys):
+        db.delete(journey)
     for hotel in list(trip.hotel_options):
         db.delete(hotel)
 
     trip.selected_option_id = None
+    trip.selected_journey_id = None
     trip.status = "planning"
     trip.planning_mode = "pending"
 
@@ -355,6 +367,13 @@ def update_booking_selection(
         provider = option.source_name if option else None
         label = option.route_summary if option else None
         booking_url = option.booking_url if option else None
+    elif payload.booking_type == "journey":
+        option = next((item for item in trip.travel_journeys if item.id == payload.option_id), None)
+        provider = "Trip Architect" if option else None
+        label = option.title if option else None
+        # A journey has many deep links; the booking record points at the first leg.
+        first_segment = option.segments[0] if (option and option.segments) else None
+        booking_url = (first_segment.deep_link if first_segment else "") if option else None
     else:
         option = next((item for item in trip.hotel_options if item.id == payload.option_id), None)
         provider = option.source_name if option else None
@@ -367,6 +386,10 @@ def update_booking_selection(
     if payload.booking_type == "flight" and trip.flight_selection_locked:
         if trip.locked_flight_option_id != payload.option_id or payload.selection_state == "none":
             _raise_flight_lock_error()
+
+    if payload.booking_type == "journey" and trip.selected_journey_id is not None:
+        if trip.selected_journey_id != payload.option_id or payload.selection_state == "none":
+            _raise_journey_lock_error()
 
     existing = next(
         (
@@ -381,6 +404,8 @@ def update_booking_selection(
         if existing is not None:
             trip.confirmed_bookings.remove(existing)
             db.delete(existing)
+        if payload.booking_type == "journey" and trip.selected_journey_id == payload.option_id:
+            trip.selected_journey_id = None
     else:
         if trip.saved_trip is None:
             trip.saved_trip = SavedTrip(
@@ -412,6 +437,12 @@ def update_booking_selection(
         if payload.booking_type == "flight" and payload.selection_state in {"saved", "confirmed"}:
             trip.flight_selection_locked = True
             trip.locked_flight_option_id = payload.option_id
+
+        # Selecting a whole journey commits the route: it locks the trip the same way a
+        # flight does (no regenerate / option-switch) and makes other journeys read-only.
+        if payload.booking_type == "journey" and payload.selection_state in {"saved", "confirmed"}:
+            trip.selected_journey_id = payload.option_id
+            trip.flight_selection_locked = True
 
     trip.status = "saved" if trip.saved_trip is not None else trip.status
     _update_confirmed_booking_count(trip)

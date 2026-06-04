@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from itertools import combinations
 import json
@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from app.core.config import Settings
 from app.schemas.trip import TripCreateRequest
 from app.services.booking import build_booking_link, build_kayak_flights_link
+from app.services.travel import build_travel_journeys
 from app.services.google_places import PlaceLookupResult, search_places
 
 StructuredPayloadT = TypeVar("StructuredPayloadT", bound=BaseModel)
@@ -166,6 +167,7 @@ class ItineraryArtifacts:
     hotels: list[dict[str, Any]]
     sources: list[dict[str, Any]]
     steps: list[dict[str, Any]]
+    journeys: list[dict[str, Any]] = field(default_factory=list)
     fallback_reason: str | None = None
 
 
@@ -892,6 +894,7 @@ class TripPlanner:
             "days": day_rows,
         }
         flights = _build_flight_options(payload, selected_option)
+        journeys = build_travel_journeys(self.settings, payload, selected_option)
         hotels = _build_hotel_options(payload, selected_option, [])
         steps = [
             {"agent": "research-agent", "status": "completed", "detail": "Mapped destination themes and neighborhood fit."},
@@ -908,6 +911,7 @@ class TripPlanner:
             hotels=hotels,
             sources=_planning_sources(selected_option["destination_order"], "mock"),
             steps=steps,
+            journeys=journeys,
             fallback_reason=fallback_reason,
         )
 
@@ -1057,6 +1061,7 @@ class TripPlanner:
         )
         hotels = _build_hotel_options(payload, selected_option, hotel_places)
         flights = _build_flight_options(payload, selected_option)
+        journeys = build_travel_journeys(self.settings, payload, selected_option)
         sources = _dedupe_sources(
             [source.model_dump() for source in structured.sources] + _tavily_sources(tavily_results) + _place_sources(venue_places + hotel_places)
         )
@@ -1079,4 +1084,5 @@ class TripPlanner:
                 {"agent": "gemini-itinerary-agent", "status": "completed", "detail": "Synthesized the final day-by-day itinerary from both research layers."},
                 {"agent": "booking-discovery-agent", "status": "completed", "detail": "Prepared Booking.com and Kayak deeplinks for stays and flights."},
             ],
+            journeys=journeys,
         )

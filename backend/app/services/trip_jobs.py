@@ -7,7 +7,17 @@ from sqlalchemy.orm import joinedload
 
 from app.core.config import get_settings
 from app.db.session import SessionLocal
-from app.models import AgentRun, FlightOption, HotelOption, Itinerary, ItineraryDay, TripOption, TripRequest
+from app.models import (
+    AgentRun,
+    FlightOption,
+    HotelOption,
+    Itinerary,
+    ItineraryDay,
+    TravelJourney,
+    TravelSegment,
+    TripOption,
+    TripRequest,
+)
 from app.schemas.trip import TripCreateRequest
 from app.services.agent_planner import TripPlanner
 from app.services.job_runner import submit_background_job
@@ -258,6 +268,11 @@ def _run_itinerary_generation(trip_id: str, option_id: str) -> None:
 
         db.query(FlightOption).filter(FlightOption.trip_option_id == selected_option.id).delete()
         db.query(HotelOption).filter(HotelOption.trip_option_id == selected_option.id).delete()
+        stale_journeys = db.query(TravelJourney).filter(
+            TravelJourney.trip_option_id == selected_option.id
+        ).all()
+        for stale in stale_journeys:
+            db.delete(stale)
 
         for flight in itinerary_artifacts.flights:
             db.add(
@@ -294,6 +309,41 @@ def _run_itinerary_generation(trip_id: str, option_id: str) -> None:
                     maps_url=hotel.get("maps_url"),
                 )
             )
+
+        for journey in itinerary_artifacts.journeys:
+            journey_row = TravelJourney(
+                trip_request_id=trip.id,
+                trip_option_id=selected_option.id,
+                persona_key=_bounded_text(journey["persona_key"], 40, "balanced"),
+                title=_bounded_text(journey["title"], 120, "Travel journey"),
+                summary=_bounded_text(journey.get("summary"), 1000),
+                is_recommended=bool(journey.get("is_recommended")),
+                total_price_min=int(journey.get("total_price_min", 0)),
+                total_price_max=int(journey.get("total_price_max", 0)),
+                total_duration_minutes=journey.get("total_duration_minutes"),
+                fit_score=float(journey.get("fit_score", 0.0)),
+                tags=journey.get("tags", []),
+                sort_order=int(journey.get("sort_order", 0)),
+            )
+            db.add(journey_row)
+            db.flush()
+            for segment in journey["segments"]:
+                db.add(
+                    TravelSegment(
+                        journey_id=journey_row.id,
+                        order_index=int(segment.get("order_index", 0)),
+                        mode=_bounded_text(segment["mode"], 20, "flight"),
+                        from_label=_bounded_text(segment["from_label"], 120, "Origin"),
+                        to_label=_bounded_text(segment["to_label"], 120, "Destination"),
+                        depart_time=segment.get("depart_time"),
+                        arrive_time=segment.get("arrive_time"),
+                        provider=_bounded_text(segment.get("provider"), 120),
+                        price_estimate=segment.get("price_estimate"),
+                        deep_link=segment.get("deep_link") or "",
+                        note=_bounded_text(segment.get("note"), 1000),
+                        data_source=_bounded_text(segment.get("data_source"), 20, "generator"),
+                    )
+                )
 
         trip.status = "saved" if trip.saved_trip is not None else "selected"
 

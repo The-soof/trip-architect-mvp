@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client'
 import AppShell from '../components/AppShell'
 import GlobeLoader from '../components/GlobeLoader'
 import InventoryPanel from '../components/InventoryPanel'
+import TravelJourneys from '../components/TravelJourneys'
 import { BUILDING_LOADER, OPTIONS_LOADER } from '../lib/loaderCopy'
 import OptionCard from '../components/OptionCard'
 import Timeline from '../components/Timeline'
@@ -227,8 +228,8 @@ export default function TripDetailPage() {
     { label: 'Lock in your route direction', done: Boolean(trip.selected_option_id) },
     { label: 'Itinerary generated', done: Boolean(itinerary) },
     {
-      label: 'Select your flights',
-      done: trip.confirmed_bookings.some((b) => b.booking_type === 'flight' && b.selection_state === 'confirmed'),
+      label: 'Select your travel journey',
+      done: Boolean(trip.selected_journey_id),
     },
     {
       label: 'Choose your lodging stays',
@@ -245,7 +246,7 @@ export default function TripDetailPage() {
     },
     {
       q: 'Where do the booking links go?',
-      a: 'All booking links open live Kayak and Booking.com listings. Trip Architect does not add service fees.',
+      a: 'Each travel step links out to a live search on a relevant provider—Kayak for flights, Ferryhopper for ferries, Omio for rail, and Booking.com for stays. Trip Architect does not add service fees.',
     },
   ]
 
@@ -288,9 +289,9 @@ export default function TripDetailPage() {
 
       {isFlightLocked ? (
         <section className="surface-card planner-notice" aria-live="polite">
-          <p className="eyebrow">Flight locked</p>
-          <h2>A flight has been saved, so this route is now permanent.</h2>
-          <p>You can still review the itinerary, stays, and the saved flight, but you can no longer regenerate options or switch to another route.</p>
+          <p className="eyebrow">Route locked</p>
+          <h2>A travel journey has been selected, so this route is now permanent.</h2>
+          <p>You can still review the itinerary, stays, and your selected journey, but you can no longer regenerate options or switch to another route.</p>
         </section>
       ) : null}
 
@@ -510,15 +511,12 @@ export default function TripDetailPage() {
 
       {activeTab === 'Travel' && selectedOption ? (
         <section role="tabpanel" aria-label="Trip travel">
-          <InventoryPanel
+          <TravelJourneys
             bookingSavingKey={bookingSavingKey}
-            confirmedBookings={trip.confirmed_bookings}
-            flightSelectionLocked={trip.flight_selection_locked}
-            flights={trip.flight_options}
-            hotels={trip.hotel_options}
-            lockedFlightOptionId={trip.locked_flight_option_id}
-            mode="flights"
-            onUpdateBookingSelection={handleBookingSelection}
+            journeys={trip.travel_journeys}
+            onSelectJourney={handleBookingSelection}
+            routeLocked={Boolean(trip.selected_journey_id)}
+            selectedJourneyId={trip.selected_journey_id}
           />
         </section>
       ) : null}

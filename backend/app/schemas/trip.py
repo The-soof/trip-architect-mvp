@@ -50,7 +50,7 @@ class RegenerateRequest(BaseModel):
 
 
 class BookingSelectionRequest(BaseModel):
-    booking_type: str = Field(pattern="^(flight|hotel)$")
+    booking_type: str = Field(pattern="^(flight|hotel|journey)$")
     option_id: str = Field(min_length=8, max_length=64)
     selection_state: str = Field(pattern="^(saved|confirmed|none)$")
 
@@ -157,6 +157,40 @@ class HotelOptionRead(BaseModel):
     maps_url: str | None = None
 
 
+class TravelSegmentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    order_index: int
+    mode: str
+    from_label: str
+    to_label: str
+    depart_time: str | None = None
+    arrive_time: str | None = None
+    provider: str
+    price_estimate: int | None = None
+    deep_link: str
+    note: str
+    data_source: str
+
+
+class TravelJourneyRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    persona_key: str
+    title: str
+    summary: str
+    is_recommended: bool
+    total_price_min: int
+    total_price_max: int
+    total_duration_minutes: int | None = None
+    fit_score: float
+    tags: list[str]
+    sort_order: int
+    segments: list[TravelSegmentRead]
+
+
 class ConfirmedBookingRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -216,11 +250,13 @@ class TripRead(BaseModel):
     selected_option_id: str | None
     flight_selection_locked: bool
     locked_flight_option_id: str | None
+    selected_journey_id: str | None = None
     created_at: datetime
     updated_at: datetime
     options: list[TripOptionRead]
     itineraries: list[ItineraryRead]
     flight_options: list[FlightOptionRead]
+    travel_journeys: list[TravelJourneyRead]
     hotel_options: list[HotelOptionRead]
     confirmed_bookings: list[ConfirmedBookingRead]
     agent_runs: list[AgentRunRead]

@@ -325,6 +325,100 @@ def test_saved_flight_locks_future_flight_changes(client: TestClient) -> None:
     assert clear_flight_response.status_code == 409
 
 
+def test_travel_journeys_generated_and_selection_locks_route(client: TestClient) -> None:
+    token = register_user(client)["access_token"]
+    trip = client.post("/api/trips", headers=auth_headers(token), json=trip_payload()).json()
+    trip = wait_for_trip(client, token, trip["id"], lambda payload: len(payload["options"]) >= 2)
+    selected_option_id = trip["options"][0]["id"]
+
+    client.post(
+        f"/api/trips/{trip['id']}/select-option/{selected_option_id}",
+        headers=auth_headers(token),
+    )
+    selected_trip = wait_for_trip(
+        client,
+        token,
+        trip["id"],
+        lambda payload: payload["selected_option_id"] == selected_option_id
+        and len(payload["travel_journeys"]) >= 2,
+    )
+
+    journeys = sorted(selected_trip["travel_journeys"], key=lambda j: j["sort_order"])
+    # Multiple distinct personas, exactly one recommended, each a multi-step journey.
+    assert len({j["persona_key"] for j in journeys}) == len(journeys)
+    assert sum(1 for j in journeys if j["is_recommended"]) == 1
+    assert journeys[0]["is_recommended"] is True
+    first = journeys[0]
+    assert len(first["segments"]) >= 1
+    assert all(seg["deep_link"] for seg in first["segments"])
+    assert {seg["mode"] for seg in first["segments"]} <= {"flight", "ferry", "train", "car", "transfer"}
+
+    # Selecting a whole journey locks the route.
+    journey_id = first["id"]
+    select = client.post(
+        f"/api/trips/{trip['id']}/booking-selection",
+        headers=auth_headers(token),
+        json={"booking_type": "journey", "option_id": journey_id, "selection_state": "confirmed"},
+    )
+    assert select.status_code == 200
+    locked = select.json()
+    assert locked["selected_journey_id"] == journey_id
+    assert locked["flight_selection_locked"] is True
+
+    # A different journey can no longer be selected, and the locked one can't be cleared.
+    other_id = journeys[1]["id"]
+    switch = client.post(
+        f"/api/trips/{trip['id']}/booking-selection",
+        headers=auth_headers(token),
+        json={"booking_type": "journey", "option_id": other_id, "selection_state": "confirmed"},
+    )
+    assert switch.status_code == 409
+    clear = client.post(
+        f"/api/trips/{trip['id']}/booking-selection",
+        headers=auth_headers(token),
+        json={"booking_type": "journey", "option_id": journey_id, "selection_state": "none"},
+    )
+    assert clear.status_code == 409
+
+
+def test_airport_less_island_return_routes_through_gateway() -> None:
+    from datetime import date
+
+    from app.core.config import get_settings
+    from app.schemas.trip import TripCreateRequest
+    from app.services.travel import build_travel_journeys
+
+    payload = TripCreateRequest(
+        origin="SFO",
+        start_date=date(2026, 8, 10),
+        end_date=date(2026, 8, 20),
+        destination_candidates=["Mykonos", "Ios"],
+        trip_style="Relaxed island hopping with rest and food.",
+        budget_range="mid",
+        traveler_count=2,
+        pace_preference="relaxed",
+    )
+    option = {
+        "destination_order": ["Mykonos", "Ios"],
+        "days_by_stop": [{"city": "Mykonos", "nights": 5}, {"city": "Ios", "nights": 5}],
+        "pace_label": "Relaxed",
+        "estimated_total_min": 4200,
+        "return_city": "SFO",
+    }
+    journeys = build_travel_journeys(get_settings(), payload, option)
+    assert journeys
+    segments = journeys[0]["segments"]
+
+    # Ios has no airport: the trip must ferry back to the Mykonos gateway, not fly from Ios.
+    flights = [s for s in segments if s["mode"] == "flight"]
+    assert flights[-1]["from_label"] == "Mykonos"
+    assert all(s["from_label"] != "Ios" for s in flights)
+    assert any(
+        s["mode"] == "ferry" and s["from_label"] == "Ios" and s["to_label"] == "Mykonos"
+        for s in segments
+    )
+
+
 def test_normalize_days_by_stop_accepts_agent_city_night_maps() -> None:
     normalized = _normalize_days_by_stop(
         [{"Barcelona": 3}, {"Split": 5}],

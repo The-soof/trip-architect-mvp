@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
-from app.models import ConfirmedBooking
+from app.models import ConfirmedBooking, TravelJourney, TravelSegment
 
 
 def ensure_runtime_schema(engine: Engine) -> None:
@@ -48,6 +48,8 @@ def ensure_runtime_schema(engine: Engine) -> None:
                 connection.execute(text("ALTER TABLE trip_requests ADD COLUMN locked_flight_option_id VARCHAR(36)"))
             if "brief_summary" not in trip_columns:
                 connection.execute(text("ALTER TABLE trip_requests ADD COLUMN brief_summary TEXT"))
+            if "selected_journey_id" not in trip_columns:
+                connection.execute(text("ALTER TABLE trip_requests ADD COLUMN selected_journey_id VARCHAR(36)"))
 
         if "trip_options" in existing_tables:
             option_columns = {column["name"] for column in inspector.get_columns("trip_options")}
@@ -56,3 +58,8 @@ def ensure_runtime_schema(engine: Engine) -> None:
 
         if "confirmed_bookings" not in existing_tables:
             ConfirmedBooking.__table__.create(bind=connection, checkfirst=True)
+
+        if "travel_journeys" not in existing_tables:
+            TravelJourney.__table__.create(bind=connection, checkfirst=True)
+        if "travel_segments" not in existing_tables:
+            TravelSegment.__table__.create(bind=connection, checkfirst=True)

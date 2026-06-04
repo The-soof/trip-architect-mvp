@@ -2541,3 +2541,279 @@ body.home-active::before {
   width: 320px;
   height: 320px;
 }
+
+/* ---------- Travel journeys (persona, multi-modal) ---------- */
+.journey-list {
+  display: grid;
+  gap: 14px;
+}
+
+.journey-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-strong);
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.journey-card--recommended {
+  border-color: rgba(15, 118, 110, 0.45);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.18), var(--shadow-md);
+}
+
+.journey-card--selected {
+  border-color: var(--success);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.32);
+}
+
+.journey-card--readonly {
+  opacity: 0.62;
+}
+
+.journey-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 18px 20px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.journey-head:hover {
+  background: var(--surface-muted);
+}
+
+.journey-head-main {
+  display: grid;
+  gap: 7px;
+}
+
+.journey-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.journey-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.journey-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(15, 118, 110, 0.14);
+  color: var(--success);
+}
+
+.journey-badge--selected {
+  background: var(--success);
+  color: #fff;
+}
+
+.journey-summary {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  max-width: 62ch;
+}
+
+.journey-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 2px;
+}
+
+.journey-stat {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.journey-stat--price {
+  color: var(--ink);
+  font-size: 0.98rem;
+}
+
+.journey-stat--soft {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.journey-chevron {
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  margin-top: 4px;
+}
+
+.journey-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.journey-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 20px 14px;
+}
+
+.journey-tag {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.journey-segments {
+  list-style: none;
+  margin: 0;
+  padding: 4px 20px 8px;
+  display: grid;
+  gap: 0;
+}
+
+.segment-row {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 14px;
+  padding: 12px 0;
+  position: relative;
+}
+
+/* Vertical connector line down the timeline. */
+.segment-row::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 34px;
+  bottom: -12px;
+  width: 2px;
+  background: var(--line);
+}
+
+.segment-row:last-child::before {
+  display: none;
+}
+
+.segment-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  z-index: 1;
+}
+
+.segment-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.segment-headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.segment-route {
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.segment-link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--success);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.segment-link:hover {
+  text-decoration: underline;
+}
+
+.segment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.segment-time {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.segment-time--soft {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.segment-dot {
+  color: var(--line-strong);
+}
+
+.segment-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.journey-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 20px 20px;
+}
+
+.journey-foot .primary-button {
+  min-height: 40px;
+}
+
+@media (max-width: 560px) {
+  .journey-head {
+    padding: 16px;
+  }
+
+  .journey-tags,
+  .journey-segments,
+  .journey-foot {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .segment-headline {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
