@@ -419,6 +419,61 @@ def test_airport_less_island_return_routes_through_gateway() -> None:
     )
 
 
+def test_gemini_route_plan_normalizes_legs(monkeypatch) -> None:
+    from datetime import date
+
+    from app.core.config import Settings
+    from app.schemas.trip import TripCreateRequest
+    from app.services.travel.journey_builder import (
+        GeminiJourneyPlanPayload,
+        GeminiTravelLegPayload,
+        _build_legs_with_gemini,
+    )
+
+    plan = GeminiJourneyPlanPayload(
+        legs=[
+            GeminiTravelLegPayload(mode="flight", from_place="San Francisco (SFO)", to_place="Mykonos (JMK)"),
+            GeminiTravelLegPayload(mode="taxi", from_place="Mykonos", to_place="Mykonos hotel", note="Transfer"),
+            GeminiTravelLegPayload(mode="boat", from_place="Mykonos", to_place="Ios", provider_hint="SeaJets"),
+            GeminiTravelLegPayload(mode="ferry", from_place="Ios", to_place="Santorini"),
+            GeminiTravelLegPayload(mode="flight", from_place="Santorini (JTR)", to_place="San Francisco"),
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.agent_planner._generate_structured_with_gemini",
+        lambda *args, **kwargs: plan,
+    )
+    payload = TripCreateRequest(
+        origin="SFO",
+        start_date=date(2026, 8, 10),
+        end_date=date(2026, 8, 20),
+        destination_candidates=["Mykonos", "Ios"],
+        trip_style="Relaxed island hopping with rest.",
+        budget_range="mid",
+        traveler_count=2,
+        pace_preference="relaxed",
+    )
+    option = {
+        "destination_order": ["Mykonos", "Ios"],
+        "days_by_stop": [{"city": "Mykonos", "nights": 5}, {"city": "Ios", "nights": 5}],
+        "pace_label": "Relaxed",
+        "estimated_total_min": 4200,
+        "return_city": "SFO",
+    }
+    settings = Settings(gemini_api_key="x", enable_real_agent=True)
+    legs = _build_legs_with_gemini(settings, payload, option)
+
+    # Modes normalized (taxi->transfer, boat->ferry), airport-code parens stripped.
+    assert [leg.mode for leg in legs] == ["flight", "transfer", "ferry", "ferry", "flight"]
+    assert legs[0].frm == "San Francisco" and legs[0].to == "Mykonos"
+    # Outbound flight departs day 1; the home flight (from the Santorini gateway) on the last day.
+    assert legs[0].day == date(2026, 8, 10)
+    assert legs[-1].day == date(2026, 8, 20)
+    assert legs[-1].frm == "Santorini"
+    # Gemini's ground-leg hints carry through.
+    assert legs[2].provider == "SeaJets"
+
+
 def test_normalize_days_by_stop_accepts_agent_city_night_maps() -> None:
     normalized = _normalize_days_by_stop(
         [{"Barcelona": 3}, {"Split": 5}],

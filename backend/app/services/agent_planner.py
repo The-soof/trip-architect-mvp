@@ -1057,7 +1057,7 @@ class TripPlanner:
             prompt,
             DeepItineraryPayload,
             temperature=0.3,
-            thinking_budget=0,
+            thinking_budget=1024,
         )
         hotels = _build_hotel_options(payload, selected_option, hotel_places)
         flights = _build_flight_options(payload, selected_option)

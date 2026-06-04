@@ -23,3 +23,4 @@ backend/test_trip_architect.db
 backend/.pytest_cache/
 frontend/node_modules/
 frontend/dist/
+SKILL.md

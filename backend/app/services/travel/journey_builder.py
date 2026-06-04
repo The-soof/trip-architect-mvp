@@ -10,8 +10,12 @@ favoring routes that already include a ferry or train.
 
 from __future__ import annotations
 
+import json
+import re
 from datetime import date, datetime, timedelta
 from typing import Any
+
+from pydantic import BaseModel, Field
 
 from app.core.config import Settings
 from app.schemas.trip import TripCreateRequest
@@ -170,15 +174,28 @@ def _pick_candidate(candidates: list[FlightCandidate], persona: str) -> FlightCa
 
 
 class _Leg:
-    __slots__ = ("mode", "frm", "to", "day", "kind", "base_price")
+    __slots__ = ("mode", "frm", "to", "day", "kind", "base_price", "provider", "note")
 
-    def __init__(self, mode: str, frm: str, to: str, day: date, kind: str, base_price: int):
+    def __init__(
+        self,
+        mode: str,
+        frm: str,
+        to: str,
+        day: date,
+        kind: str,
+        base_price: int,
+        provider: str | None = None,
+        note: str | None = None,
+    ):
         self.mode = mode
         self.frm = frm
         self.to = to
         self.day = day
         self.kind = kind
         self.base_price = base_price
+        # Optional overrides supplied by the Gemini route planner (Approach B).
+        self.provider = provider
+        self.note = note
 
 
 def _stop_dates(payload: TripCreateRequest, stops: list[dict[str, Any]]) -> tuple[list[date], list[date]]:
@@ -249,6 +266,143 @@ def _build_legs(payload: TripCreateRequest, selected_option: dict[str, Any]) -> 
     return legs
 
 
+# --------------------------------------------------------------------------- #
+# Approach B: Gemini-generated route topology.
+#
+# Gemini decides the door-to-door leg structure (modes, gateways, transfers)
+# using its global geographic knowledge — no hand-maintained island/airport
+# tables. Flight legs still flow through the provider seam for real SerpApi
+# times/prices, and personas still pick from the candidate spread. Any failure
+# (no key, bad JSON, no flights) falls back to the deterministic _build_legs.
+# --------------------------------------------------------------------------- #
+
+_MODE_ALIASES = {
+    "flight": "flight", "fly": "flight", "plane": "flight", "air": "flight", "airplane": "flight",
+    "ferry": "ferry", "boat": "ferry", "sea": "ferry", "catamaran": "ferry", "hydrofoil": "ferry",
+    "train": "train", "rail": "train", "highspeed": "train", "high-speed": "train",
+    "car": "car", "drive": "car", "rental": "car", "self-drive": "car", "road": "car",
+    "transfer": "transfer", "taxi": "transfer", "shuttle": "transfer", "bus": "transfer",
+    "coach": "transfer", "metro": "transfer", "rideshare": "transfer", "private": "transfer",
+}
+
+
+class GeminiTravelLegPayload(BaseModel):
+    mode: str = Field(description="One of: flight, ferry, train, car, transfer.")
+    from_place: str = Field(description="Departure place name (city; for flights you may append an airport code in parentheses).")
+    to_place: str = Field(description="Arrival place name, same convention as from_place.")
+    note: str = Field(default="", description="Optional short rider, under 12 words (e.g. 'Gateway ferry to the nearest airport').")
+    provider_hint: str = Field(default="", description="Optional typical operator/carrier (e.g. 'SeaJets ferry', 'Trenitalia', 'Multiple airlines').")
+
+
+class GeminiJourneyPlanPayload(BaseModel):
+    legs: list[GeminiTravelLegPayload] = Field(default_factory=list)
+
+
+def _normalize_mode(raw: str) -> str:
+    key = re.sub(r"[^a-z-]", "", (raw or "").lower())
+    return _MODE_ALIASES.get(key, "flight" if "flight" in key else "transfer")
+
+
+def _clean_place(place: str) -> str:
+    """Strip parenthetical airport codes etc. so IATA lookup uses the plain city name."""
+    return re.sub(r"\s*\(.*?\)\s*", " ", place or "").strip() or place.strip()
+
+
+def _gemini_journey_prompt(
+    payload: TripCreateRequest,
+    cities: list[str],
+    stops: list[dict[str, Any]],
+    return_target: str,
+    one_way: bool,
+) -> str:
+    stop_lines = ", ".join(
+        f"{c} ({int(s.get('nights', 1))} nights)" for c, s in zip(cities, stops, strict=False)
+    )
+    ending = "a one-way trip ending at the final stop (no journey home)" if one_way else f"returning to {return_target}"
+    return (
+        "You are Trip Architect's travel-logistics planner. Return ONLY valid JSON. "
+        "Produce the realistic, ordered, door-to-door sequence of travel legs for this trip, "
+        "from the origin through every stop IN THE GIVEN ORDER, then "
+        f"{ending}. Do not skip, add, or reorder stops.\n"
+        "Rules:\n"
+        "- Pick the right mode for each hop: 'flight' for long or no-rail intercity hops; 'ferry' between islands or coastal ports; "
+        "'train' for shorter same-country mainland hops; 'car' for short scenic drives.\n"
+        "- CRITICAL: never put a flight departing from or arriving at a place with no commercial airport (e.g. small Greek isles like Ios, Hydra). "
+        "Instead, route via the nearest gateway: ferry/train/drive to a city that HAS an airport, then fly.\n"
+        "- Include short local 'transfer' legs where natural (airport/port to accommodation).\n"
+        "- Use real place names. For flight legs you may append the airport code in parentheses.\n"
+        f"Origin: {payload.origin}. Stops in order: {stop_lines}. "
+        f"Dates: {payload.start_date} to {payload.end_date}. Travelers: {payload.traveler_count}."
+    )
+
+
+def _build_legs_with_gemini(
+    settings: Settings, payload: TripCreateRequest, selected_option: dict[str, Any]
+) -> list[_Leg]:
+    stops = selected_option.get("days_by_stop") or []
+    cities = [str(stop["city"]).strip() for stop in stops if stop.get("city")]
+    if not cities:
+        cities = [str(c).strip() for c in selected_option.get("destination_order", []) if str(c).strip()]
+        stops = [{"city": c, "nights": 2} for c in cities]
+    if not cities:
+        raise ValueError("no cities to plan")
+
+    _, departures = _stop_dates(payload, stops)
+    return_city = (selected_option.get("return_city") or "").strip()
+    one_way = return_city.lower() == "none"
+    if return_city and not one_way and return_city.lower() != payload.origin.strip().lower():
+        return_target = return_city
+    else:
+        return_target = payload.origin.strip()
+
+    # Lazy import avoids a circular dependency (agent_planner imports this module).
+    from app.services.agent_planner import _generate_structured_with_gemini
+
+    prompt = _gemini_journey_prompt(payload, cities, stops, return_target, one_way)
+    plan = _generate_structured_with_gemini(
+        settings, prompt, GeminiJourneyPlanPayload, temperature=0.2, thinking_budget=1024
+    )
+    raw_legs = [leg for leg in plan.legs if leg.from_place.strip() and leg.to_place.strip()]
+    if not any(_normalize_mode(leg.mode) == "flight" for leg in raw_legs):
+        raise ValueError("Gemini plan contained no flights")
+
+    total_min = int(selected_option.get("estimated_total_min", 2400))
+    n_air = sum(1 for leg in raw_legs if _normalize_mode(leg.mode) == "flight")
+    base_air = max(150, int(total_min * 0.24 / max(1, n_air)))
+
+    cities_lower = [c.lower() for c in cities]
+
+    def stop_index(place: str) -> int | None:
+        pl = _clean_place(place).lower()
+        for i, c in enumerate(cities_lower):
+            if c and (c in pl or pl in c):
+                return i
+        return None
+
+    legs: list[_Leg] = []
+    reached = -1  # highest stop index reached; -1 = still at origin
+    for gleg in raw_legs:
+        mode = _normalize_mode(gleg.mode)
+        frm, to = _clean_place(gleg.from_place), _clean_place(gleg.to_place)
+        # Phase-based date: outbound legs depart on day 1, return legs on the last day,
+        # inter-stop legs on the day you leave the originating stop. Only flights/ferries
+        # actually consume the date, and those land in the correct phase.
+        if reached < 0:
+            day, kind = payload.start_date, "outbound"
+        elif reached >= len(cities) - 1:
+            day, kind = payload.end_date, "return"
+        else:
+            day, kind = departures[min(reached, len(departures) - 1)], "inter"
+
+        price = base_air if mode == "flight" else GROUND_DEFAULTS.get(mode, GROUND_DEFAULTS["transfer"])["price"]
+        legs.append(_Leg(mode, frm, to, day, kind, price, provider=gleg.provider_hint or None, note=gleg.note or None))
+
+        to_idx = stop_index(gleg.to_place)
+        if to_idx is not None and to_idx > reached:
+            reached = to_idx
+    return legs
+
+
 def _segment(order: int, mode: str, frm: str, to: str, **kw: Any) -> dict[str, Any]:
     return {
         "order_index": order,
@@ -271,7 +425,15 @@ def _assemble_segments(
     legs: list[_Leg],
     candidates_by_leg: dict[int, list[FlightCandidate]],
     persona: str,
+    *,
+    auto_transfers: bool = True,
 ) -> list[dict[str, Any]]:
+    """Render a leg plan into persona-specific segments.
+
+    `auto_transfers=True` (deterministic builder) inserts arrival transfers itself.
+    `auto_transfers=False` (Gemini builder) renders exactly the legs Gemini produced,
+    since it already includes its own transfer legs.
+    """
     segments: list[dict[str, Any]] = []
     order = 0
     for leg_index, leg in enumerate(legs):
@@ -292,13 +454,15 @@ def _assemble_segments(
             )
             order += 1
             # Arrival transfer into a base city (not after the flight home).
-            if leg.kind in ("outbound", "inter"):
+            if auto_transfers and leg.kind in ("outbound", "inter"):
                 segments.append(_arrival_transfer(order, leg.to))
                 order += 1
         else:
-            defaults = GROUND_DEFAULTS[leg.mode]
+            defaults = GROUND_DEFAULTS.get(leg.mode, GROUND_DEFAULTS["transfer"])
             deep = _ground_link(leg)
-            if leg.kind == "outbound_transfer":
+            if leg.note:
+                note = leg.note
+            elif leg.kind == "outbound_transfer":
                 note = f"Ferry from {leg.frm} (gateway airport) to {leg.to}"
             elif leg.kind == "return_transfer":
                 note = f"Ferry to {leg.to} to connect with the flight home"
@@ -307,18 +471,19 @@ def _assemble_segments(
                     "ferry": "Island/coastal ferry crossing",
                     "train": "Direct regional rail",
                     "car": "Self-drive leg",
+                    "transfer": "Local transfer",
                 }.get(leg.mode, "")
             segments.append(
                 _segment(
                     order, leg.mode, leg.frm, leg.to,
-                    provider=defaults["provider"], price_estimate=leg.base_price,
+                    provider=leg.provider or defaults["provider"], price_estimate=leg.base_price,
                     deep_link=deep, note=note, data_source="generator",
                 )
             )
             order += 1
             # Add a port→accommodation transfer only when arriving somewhere to stay.
             # A return-gateway ferry heads to the airport, so it gets no transfer.
-            if leg.mode in ("ferry", "train") and leg.kind != "return_transfer":
+            if auto_transfers and leg.mode in ("ferry", "train") and leg.kind != "return_transfer":
                 segments.append(_arrival_transfer(order, leg.to))
                 order += 1
     return segments
@@ -369,7 +534,24 @@ def build_travel_journeys(
     selected_option: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """Return a list of persona journey dicts ready to persist as TravelJourney rows."""
-    legs = _build_legs(payload, selected_option)
+    # Approach B: let Gemini plan the route topology when the live agent is on; fall back
+    # to the deterministic geography builder (Approach A) when it's off or anything fails.
+    legs: list[_Leg] = []
+    auto_transfers = True
+    if settings.enable_real_agent and settings.gemini_api_key:
+        try:
+            legs = _build_legs_with_gemini(settings, payload, selected_option)
+            auto_transfers = False
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully to the deterministic builder
+            print(
+                "trip_architect.travel "
+                + json.dumps({"message": "gemini_route_fallback", "detail": str(exc)[:200]}),
+                flush=True,
+            )
+            legs = []
+    if not legs:
+        legs = _build_legs(payload, selected_option)
+        auto_transfers = True
     if not legs:
         return []
 
@@ -385,7 +567,9 @@ def build_travel_journeys(
     journeys: list[dict[str, Any]] = []
     seen_signatures: dict[tuple, dict[str, Any]] = {}
     for persona in PERSONA_ORDER:
-        segments = _assemble_segments(settings, payload, legs, candidates_by_leg, persona)
+        segments = _assemble_segments(
+            settings, payload, legs, candidates_by_leg, persona, auto_transfers=auto_transfers
+        )
         signature = _signature(segments)
         meta = PERSONAS[persona]
         if signature in seen_signatures:
