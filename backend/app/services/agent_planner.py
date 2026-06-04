@@ -440,11 +440,17 @@ def _generate_structured_with_gemini(
         ),
     ]
 
+    model_lower = (settings.gemini_model or "").lower()
+    if "gemini-2.5" in model_lower or "gemini-3" in model_lower:
+        max_tokens = 65535
+    else:
+        max_tokens = 8192
+
     config_args = {
         "temperature": temperature,
         "response_mime_type": "application/json",
         "response_schema": schema,
-        "max_output_tokens": 16384,
+        "max_output_tokens": max_tokens,
         "safety_settings": safety_settings,
     }
     if thinking_budget > 0:
