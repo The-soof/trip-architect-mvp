@@ -447,36 +447,55 @@ def _generate_structured_with_gemini(
     else:
         max_tokens = 8192
 
-    config_args = {
-        "temperature": temperature,
-        "response_mime_type": "application/json",
-        "response_schema": schema,
-        "max_output_tokens": max_tokens,
-        "safety_settings": safety_settings,
-    }
-    if thinking_budget > 0:
-        config_args["thinking_config"] = types.ThinkingConfig(
-            thinking_budget=thinking_budget
-        )
-    else:
-        config_args["thinking_config"] = types.ThinkingConfig(
-            thinking_budget=0
-        )
+    attempts = 2
+    last_exc = None
+    curr_temp = temperature
 
-    response = client.models.generate_content(
-        model=settings.gemini_model,
-        contents=prompt,
-        config=types.GenerateContentConfig(**config_args),
-    )
-    if response.candidates:
-        candidate = response.candidates[0]
-        finish_reason = getattr(candidate, "finish_reason", None)
-        if finish_reason:
-            reason_str = str(finish_reason).upper()
-            if "STOP" not in reason_str:
-                raise ValueError(f"Gemini generation stopped prematurely. Finish reason: {finish_reason}.")
+    for attempt in range(attempts):
+        config_args = {
+            "temperature": curr_temp,
+            "response_mime_type": "application/json",
+            "response_schema": schema,
+            "max_output_tokens": max_tokens,
+            "safety_settings": safety_settings,
+            "stop_sequences": ["\n\n\n"],
+        }
+        if thinking_budget > 0:
+            config_args["thinking_config"] = types.ThinkingConfig(
+                thinking_budget=thinking_budget
+            )
+        else:
+            config_args["thinking_config"] = types.ThinkingConfig(
+                thinking_budget=0
+            )
 
-    return schema.model_validate_json(_message_text_from_response(response))
+        try:
+            response = client.models.generate_content(
+                model=settings.gemini_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(**config_args),
+            )
+            if response.candidates:
+                candidate = response.candidates[0]
+                finish_reason = getattr(candidate, "finish_reason", None)
+                if finish_reason:
+                    reason_str = str(finish_reason).upper()
+                    if "STOP" not in reason_str:
+                        raise ValueError(f"Gemini generation stopped prematurely. Finish reason: {finish_reason}.")
+
+            return schema.model_validate_json(_message_text_from_response(response))
+        except Exception as exc:
+            last_exc = exc
+            # Escalate temperature to shake the model out of repetition loops on retry
+            curr_temp = min(0.6, curr_temp + 0.15)
+            _log_agent_event(
+                "gemini_structured",
+                f"Generation attempt {attempt + 1} failed. Retrying...",
+                error=str(exc),
+                next_temperature=curr_temp
+            )
+
+    raise last_exc
 
 
 def _dedupe_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1029,7 +1048,11 @@ class TripPlanner:
                 "city": result.city,
                 "category": result.category,
                 "reason": result.reason,
-                "place": result.place,
+                "place": {
+                    "name": result.place["name"],
+                    "rating": result.place.get("rating"),
+                    "opening_hours_summary": result.place.get("opening_hours_summary"),
+                },
             }
             for result in venue_places + hotel_places
             if result.place

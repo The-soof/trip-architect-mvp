@@ -58,12 +58,16 @@ def search_places(
     body = response.json()
     places = body.get("places", [])
     normalized = [_normalize_place(place) for place in places]
+    operational = [
+        p for p in normalized
+        if p.get("business_status") not in ("CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY")
+    ]
     return PlaceLookupResult(
         query=query,
         city=city,
         category=category,
         reason=reason,
-        place=normalized[0] if normalized else None,
+        place=operational[0] if operational else None,
     )
 
 
