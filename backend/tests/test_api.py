@@ -405,8 +405,10 @@ def test_airport_less_island_return_routes_through_gateway() -> None:
         "estimated_total_min": 4200,
         "return_city": "SFO",
     }
-    journeys = build_travel_journeys(get_settings(), payload, option)
+    journeys, notices = build_travel_journeys(get_settings(), payload, option)
     assert journeys
+    # With no flight-search key configured in tests, a fallback notice explains the estimates.
+    assert any("estimate" in n.lower() for n in notices)
     segments = journeys[0]["segments"]
 
     # Ios has no airport: the trip must ferry back to the Mykonos gateway, not fly from Ios.
@@ -417,6 +419,22 @@ def test_airport_less_island_return_routes_through_gateway() -> None:
         s["mode"] == "ferry" and s["from_label"] == "Ios" and s["to_label"] == "Mykonos"
         for s in segments
     )
+
+
+def test_iata_resolution_handles_descriptors_and_codes() -> None:
+    from app.services.booking import resolve_iata_code
+    from app.services.travel.providers import _is_long_haul
+
+    # "New York City" must resolve (regression: it used to fall through to the
+    # generator with a bogus code, producing impossible short-haul transatlantics).
+    assert resolve_iata_code("New York City") == "JFK"
+    assert resolve_iata_code("New York (JFK)") == "JFK"  # explicit code wins
+    assert resolve_iata_code("Mexico City") == "MEX"  # exact match not broken by 'city' strip
+    assert resolve_iata_code("Madrid") == "MAD"
+    assert resolve_iata_code("Ios") is None  # genuinely airport-less -> caller falls back
+
+    assert _is_long_haul("New York City", "Madrid") is True
+    assert _is_long_haul("Barcelona", "Madrid") is False
 
 
 def test_gemini_route_plan_normalizes_legs(monkeypatch) -> None:
@@ -463,13 +481,16 @@ def test_gemini_route_plan_normalizes_legs(monkeypatch) -> None:
     settings = Settings(gemini_api_key="x", enable_real_agent=True)
     legs = _build_legs_with_gemini(settings, payload, option)
 
-    # Modes normalized (taxi->transfer, boat->ferry), airport-code parens stripped.
+    from app.services.booking import resolve_iata_code
+
+    # Modes normalized (taxi->transfer, boat->ferry); raw place kept so the IATA code survives.
     assert [leg.mode for leg in legs] == ["flight", "transfer", "ferry", "ferry", "flight"]
-    assert legs[0].frm == "San Francisco" and legs[0].to == "Mykonos"
+    assert legs[0].frm == "San Francisco (SFO)" and legs[0].to == "Mykonos (JMK)"
+    assert resolve_iata_code(legs[0].frm) == "SFO"  # code recoverable for flight lookup
     # Outbound flight departs day 1; the home flight (from the Santorini gateway) on the last day.
     assert legs[0].day == date(2026, 8, 10)
     assert legs[-1].day == date(2026, 8, 20)
-    assert legs[-1].frm == "Santorini"
+    assert legs[-1].frm == "Santorini (JTR)"
     # Gemini's ground-leg hints carry through.
     assert legs[2].provider == "SeaJets"
 

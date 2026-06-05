@@ -23,6 +23,8 @@ function Segment({ segment }) {
   const meta = modeMeta(segment.mode)
   const depart = formatSegmentTime(segment.depart_time)
   const arrive = formatSegmentTime(segment.arrive_time)
+  // Flights are flagged "Estimated" unless they came from live flight search.
+  const isEstimatedFlight = segment.mode === 'flight' && segment.data_source !== 'serpapi'
   return (
     <li className="segment-row">
       <span aria-hidden="true" className={`segment-icon segment-icon--${segment.mode}`} title={meta.label}>
@@ -30,9 +32,16 @@ function Segment({ segment }) {
       </span>
       <div className="segment-body">
         <div className="segment-headline">
-          <strong className="segment-route">
-            {segment.from_label} <span aria-hidden="true">&rarr;</span> {segment.to_label}
-          </strong>
+          <span className="segment-route-wrap">
+            <strong className="segment-route">
+              {segment.from_label} <span aria-hidden="true">&rarr;</span> {segment.to_label}
+            </strong>
+            {isEstimatedFlight ? (
+              <span className="segment-est" title="Estimated time and price — live flight data wasn't available for this leg.">
+                Estimated
+              </span>
+            ) : null}
+          </span>
           {segment.deep_link ? (
             <a className="segment-link" href={segment.deep_link} rel="noreferrer" target="_blank">
               {meta.label === 'Flight' ? 'Find flight' : `Book ${meta.label.toLowerCase()}`} &#8599;
@@ -142,6 +151,7 @@ export default function TravelJourneys({
   routeLocked,
   onSelectJourney,
   bookingSavingKey,
+  notices = [],
 }) {
   const sorted = useMemo(
     () => [...(journeys || [])].sort((a, b) => a.sort_order - b.sort_order),
@@ -187,6 +197,21 @@ export default function TravelJourneys({
           step—flights, ferries, and transfers—with its own booking link.
         </p>
       </div>
+      {notices.length ? (
+        <div className="travel-status-bar" role="status">
+          <span aria-hidden="true" className="travel-status-icon">
+            !
+          </span>
+          <div className="travel-status-body">
+            <strong>Some flight details are estimated</strong>
+            <ul>
+              {notices.map((notice) => (
+                <li key={notice}>{notice}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
       <div className="journey-list">
         {sorted.map((journey) => {
           const isOpen = journey.id in openMap ? openMap[journey.id] : Boolean(defaultOpen[journey.id])

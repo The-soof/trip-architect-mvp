@@ -354,6 +354,8 @@ def _run_itinerary_generation(trip_id: str, option_id: str) -> None:
             run.steps = itinerary_artifacts.steps
             run.sources = itinerary_artifacts.sources
             run.output_payload = {"itinerary_title": itinerary_artifacts.itinerary["title"]}
+            if itinerary_artifacts.travel_notices:
+                run.output_payload["travel_notices"] = itinerary_artifacts.travel_notices
             if itinerary_artifacts.fallback_reason:
                 run.output_payload["fallback_reason"] = itinerary_artifacts.fallback_reason
 

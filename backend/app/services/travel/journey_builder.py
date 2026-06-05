@@ -330,7 +330,9 @@ def _gemini_journey_prompt(
         "- CRITICAL: never put a flight departing from or arriving at a place with no commercial airport (e.g. small Greek isles like Ios, Hydra). "
         "Instead, route via the nearest gateway: ferry/train/drive to a city that HAS an airport, then fly.\n"
         "- Include short local 'transfer' legs where natural (airport/port to accommodation).\n"
-        "- Use real place names. For flight legs you may append the airport code in parentheses.\n"
+        "- Use real place names. For EVERY flight leg you MUST append the airport's 3-letter IATA "
+        "code in parentheses on BOTH from_place and to_place, e.g. 'Marrakech (RAK)', 'Tokyo (HND)'. "
+        "This is how live flight prices are looked up, so the code is required.\n"
         f"Origin: {payload.origin}. Stops in order: {stop_lines}. "
         f"Dates: {payload.start_date} to {payload.end_date}. Travelers: {payload.traveler_count}."
     )
@@ -383,7 +385,9 @@ def _build_legs_with_gemini(
     reached = -1  # highest stop index reached; -1 = still at origin
     for gleg in raw_legs:
         mode = _normalize_mode(gleg.mode)
-        frm, to = _clean_place(gleg.from_place), _clean_place(gleg.to_place)
+        # Keep the raw place (it may carry an IATA code in parens we need for flight
+        # lookups); display labels are cleaned later in _assemble_segments.
+        frm, to = gleg.from_place.strip(), gleg.to_place.strip()
         # Phase-based date: outbound legs depart on day 1, return legs on the last day,
         # inter-stop legs on the day you leave the originating stop. Only flights/ferries
         # actually consume the date, and those land in the correct phase.
@@ -437,6 +441,8 @@ def _assemble_segments(
     segments: list[dict[str, Any]] = []
     order = 0
     for leg_index, leg in enumerate(legs):
+        # Display labels drop any "(IATA)" suffix; leg.frm/leg.to keep it for lookups.
+        frm_label, to_label = _clean_place(leg.frm), _clean_place(leg.to)
         if leg.mode == "flight":
             cand = _pick_candidate(candidates_by_leg[leg_index], persona)
             # Journeys are composed of one-way legs, so each flight link is one-way.
@@ -446,7 +452,7 @@ def _assemble_segments(
             note = "Nonstop" if cand.stops == 0 else f"{cand.stops} stop{'s' if cand.stops > 1 else ''}"
             segments.append(
                 _segment(
-                    order, "flight", leg.frm, leg.to,
+                    order, "flight", frm_label, to_label,
                     depart_time=cand.depart_time, arrive_time=cand.arrive_time,
                     provider=cand.carrier, price_estimate=cand.price,
                     deep_link=deep, note=note, data_source=cand.data_source,
@@ -455,7 +461,7 @@ def _assemble_segments(
             order += 1
             # Arrival transfer into a base city (not after the flight home).
             if auto_transfers and leg.kind in ("outbound", "inter"):
-                segments.append(_arrival_transfer(order, leg.to))
+                segments.append(_arrival_transfer(order, to_label))
                 order += 1
         else:
             defaults = GROUND_DEFAULTS.get(leg.mode, GROUND_DEFAULTS["transfer"])
@@ -463,9 +469,9 @@ def _assemble_segments(
             if leg.note:
                 note = leg.note
             elif leg.kind == "outbound_transfer":
-                note = f"Ferry from {leg.frm} (gateway airport) to {leg.to}"
+                note = f"Ferry from {frm_label} (gateway airport) to {to_label}"
             elif leg.kind == "return_transfer":
-                note = f"Ferry to {leg.to} to connect with the flight home"
+                note = f"Ferry to {to_label} to connect with the flight home"
             else:
                 note = {
                     "ferry": "Island/coastal ferry crossing",
@@ -475,7 +481,7 @@ def _assemble_segments(
                 }.get(leg.mode, "")
             segments.append(
                 _segment(
-                    order, leg.mode, leg.frm, leg.to,
+                    order, leg.mode, frm_label, to_label,
                     provider=leg.provider or defaults["provider"], price_estimate=leg.base_price,
                     deep_link=deep, note=note, data_source="generator",
                 )
@@ -484,7 +490,7 @@ def _assemble_segments(
             # Add a port→accommodation transfer only when arriving somewhere to stay.
             # A return-gateway ferry heads to the airport, so it gets no transfer.
             if auto_transfers and leg.mode in ("ferry", "train") and leg.kind != "return_transfer":
-                segments.append(_arrival_transfer(order, leg.to))
+                segments.append(_arrival_transfer(order, to_label))
                 order += 1
     return segments
 
@@ -532,8 +538,14 @@ def build_travel_journeys(
     settings: Settings,
     payload: TripCreateRequest,
     selected_option: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Return a list of persona journey dicts ready to persist as TravelJourney rows."""
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Build persona journeys plus a list of user-facing fallback notices.
+
+    Returns (journeys, notices). `notices` explains any time the journey fell back
+    to estimated data instead of live flight search, so the UI can surface why.
+    """
+    notices: list[str] = []
+
     # Approach B: let Gemini plan the route topology when the live agent is on; fall back
     # to the deterministic geography builder (Approach A) when it's off or anything fails.
     legs: list[_Leg] = []
@@ -553,16 +565,18 @@ def build_travel_journeys(
         legs = _build_legs(payload, selected_option)
         auto_transfers = True
     if not legs:
-        return []
+        return [], notices
 
     # Fetch the flight spread once per air leg; personas pick from the same pool.
     candidates_by_leg: dict[int, list[FlightCandidate]] = {}
     for index, leg in enumerate(legs):
         if leg.mode == "flight":
-            candidates, _source = get_flight_candidates(
+            candidates, _source, reason = get_flight_candidates(
                 settings, leg.frm, leg.to, leg.day, payload.traveler_count, leg.base_price
             )
             candidates_by_leg[index] = candidates
+            if reason and reason not in notices:
+                notices.append(reason)
 
     journeys: list[dict[str, Any]] = []
     seen_signatures: dict[tuple, dict[str, Any]] = {}
@@ -599,7 +613,7 @@ def build_travel_journeys(
         seen_signatures[signature] = journey
 
     if not journeys:
-        return []
+        return [], notices
 
     emitted = [j["persona_key"] for j in journeys]
     rec_key = _recommended_key(payload, emitted)
@@ -613,7 +627,7 @@ def build_travel_journeys(
     journeys.sort(key=lambda j: (not j["is_recommended"], -j["fit_score"]))
     for order, journey in enumerate(journeys):
         journey["sort_order"] = order
-    return journeys
+    return journeys, notices
 
 
 def _segment_duration(segment: dict[str, Any]) -> int:

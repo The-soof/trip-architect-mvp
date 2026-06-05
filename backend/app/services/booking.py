@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from urllib.parse import quote_plus
 
 # IATA city/airport codes for common Trip Architect destinations.
@@ -84,6 +85,8 @@ IATA_CODES: dict[str, str] = {
     "doha": "DOH",
     # Americas
     "new york": "JFK",
+    "new york city": "JFK",
+    "nyc": "JFK",
     "los angeles": "LAX",
     "san francisco": "SFO",
     "chicago": "ORD",
@@ -109,13 +112,41 @@ IATA_CODES: dict[str, str] = {
 }
 
 
+def resolve_iata_code(city: str) -> str | None:
+    """Return a confident IATA airport code for a city, or None if unknown.
+
+    Handles three input shapes that real planners (and Gemini) produce:
+      * an explicit code in parentheses, e.g. "New York (JFK)" -> "JFK"
+      * a known city name, e.g. "Madrid" -> "MAD"
+      * a city with a trailing descriptor, e.g. "New York City" -> "JFK"
+    Returns None when no airport can be matched, so callers can avoid querying a
+    flight API with a bogus code.
+    """
+    raw = (city or "").strip()
+    if not raw:
+        return None
+    # An explicit 3-letter airport code in parentheses always wins.
+    match = re.search(r"\(([A-Za-z]{3})\)", raw)
+    if match:
+        return match.group(1).upper()
+    key = re.sub(r"\s+", " ", raw.lower()).strip()
+    if key in IATA_CODES:
+        return IATA_CODES[key]
+    # Retry after dropping a trailing descriptor like "city" (but only as a
+    # fallback, so "Mexico City" -> MEX still matches exactly first).
+    stripped = re.sub(r"\s+", " ", re.sub(r"\bcity\b", "", key)).strip()
+    if stripped and stripped in IATA_CODES:
+        return IATA_CODES[stripped]
+    return None
+
+
 def _city_to_iata(city: str) -> str:
     """Return the IATA code for a city, or the raw city name as fallback.
 
     Kayak accepts plain city names in the path (e.g. /flights/NYC-Barcelona/...)
     so the fallback is safe even without a known code.
     """
-    return IATA_CODES.get(city.lower().strip(), city.strip())
+    return resolve_iata_code(city) or city.strip()
 
 
 def build_kayak_flights_link(

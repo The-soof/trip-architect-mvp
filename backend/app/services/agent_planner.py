@@ -168,6 +168,7 @@ class ItineraryArtifacts:
     sources: list[dict[str, Any]]
     steps: list[dict[str, Any]]
     journeys: list[dict[str, Any]] = field(default_factory=list)
+    travel_notices: list[str] = field(default_factory=list)
     fallback_reason: str | None = None
 
 
@@ -900,7 +901,7 @@ class TripPlanner:
             "days": day_rows,
         }
         flights = _build_flight_options(payload, selected_option)
-        journeys = build_travel_journeys(self.settings, payload, selected_option)
+        journeys, travel_notices = build_travel_journeys(self.settings, payload, selected_option)
         hotels = _build_hotel_options(payload, selected_option, [])
         steps = [
             {"agent": "research-agent", "status": "completed", "detail": "Mapped destination themes and neighborhood fit."},
@@ -918,6 +919,7 @@ class TripPlanner:
             sources=_planning_sources(selected_option["destination_order"], "mock"),
             steps=steps,
             journeys=journeys,
+            travel_notices=travel_notices,
             fallback_reason=fallback_reason,
         )
 
@@ -1067,7 +1069,7 @@ class TripPlanner:
         )
         hotels = _build_hotel_options(payload, selected_option, hotel_places)
         flights = _build_flight_options(payload, selected_option)
-        journeys = build_travel_journeys(self.settings, payload, selected_option)
+        journeys, travel_notices = build_travel_journeys(self.settings, payload, selected_option)
         sources = _dedupe_sources(
             [source.model_dump() for source in structured.sources] + _tavily_sources(tavily_results) + _place_sources(venue_places + hotel_places)
         )
@@ -1091,4 +1093,5 @@ class TripPlanner:
                 {"agent": "booking-discovery-agent", "status": "completed", "detail": "Prepared Booking.com and Kayak deeplinks for stays and flights."},
             ],
             journeys=journeys,
+            travel_notices=travel_notices,
         )

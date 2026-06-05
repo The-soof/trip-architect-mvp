@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from app.core.config import Settings
-from app.services.booking import _city_to_iata
+from app.services.booking import _city_to_iata, resolve_iata_code
 
 
 @dataclass
@@ -44,8 +44,8 @@ def _is_long_haul(origin: str, destination: str) -> bool:
         "ATL", "YYZ", "YVR", "SYD", "MEL", "AKL", "NRT", "KIX", "ICN", "HKG",
         "SIN", "BKK", "DPS", "DXB", "DOH", "GRU", "EZE", "SCL",
     }
-    o = _city_to_iata(origin).upper()[:3]
-    d = _city_to_iata(destination).upper()[:3]
+    o = resolve_iata_code(origin) or ""
+    d = resolve_iata_code(destination) or ""
     return o in long_haul_hubs or d in long_haul_hubs
 
 
@@ -137,10 +137,15 @@ class SerpApiFlightProvider:
     def _fetch(self, origin: str, destination: str, depart: date, adults: int) -> list[FlightCandidate]:
         import httpx  # lazy: only needed when a key is configured
 
+        dep = resolve_iata_code(origin)
+        arr = resolve_iata_code(destination)
+        if not dep or not arr:
+            # Don't spend a search (or get garbage) on an unresolvable airport code.
+            raise RuntimeError(f"unresolved airport code for {origin!r}->{destination!r}")
         params = {
             "engine": "google_flights",
-            "departure_id": _city_to_iata(origin).upper()[:3],
-            "arrival_id": _city_to_iata(destination).upper()[:3],
+            "departure_id": dep,
+            "arrival_id": arr,
             "outbound_date": depart.isoformat(),
             "type": "2",  # one-way; the builder composes legs itself
             "adults": str(max(1, adults)),
@@ -183,22 +188,41 @@ def _to_iso(value: str | None) -> str | None:
         return value
 
 
+def _friendly_fallback_reason(exc: Exception) -> str:
+    detail = str(exc).lower()
+    if "cap" in detail or "limit" in detail:
+        return "Live flight lookups hit this month's limit, so some flights are estimates."
+    if "no flights" in detail or "no result" in detail:
+        return "No live flights were found for part of this route, so those legs are estimates."
+    return "Live flight data was temporarily unavailable, so some flights are estimates."
+
+
 def get_flight_candidates(
     settings: Settings, origin: str, destination: str, depart: date, adults: int, base_price: int
-) -> tuple[list[FlightCandidate], str]:
-    """Return (candidates, data_source), trying SerpApi first then the generator.
+) -> tuple[list[FlightCandidate], str, str | None]:
+    """Return (candidates, data_source, fallback_reason).
 
-    Never raises — the generator is guaranteed to return a usable spread.
+    Tries SerpApi first, then the generator. `fallback_reason` is None on live
+    success and a short, user-facing explanation when estimates are used instead.
+    Never raises — the generator always returns a usable spread.
     """
-    if settings.serpapi_enabled:
+    resolvable = bool(resolve_iata_code(origin) and resolve_iata_code(destination))
+    if settings.serpapi_enabled and resolvable:
         try:
             candidates = SerpApiFlightProvider(settings).search(origin, destination, depart, adults, base_price)
             if candidates:
-                return candidates, "serpapi"
+                return candidates, "serpapi", None
+            reason = "No live flights were found for part of this route, so those legs are estimates."
         except Exception as exc:  # noqa: BLE001 — provider failure must degrade gracefully
             print(
                 "trip_architect.travel "
                 + json.dumps({"message": "serpapi_fallback", "detail": str(exc)[:200]}),
                 flush=True,
             )
-    return GeneratorFlightProvider().search(origin, destination, depart, adults, base_price), "generator"
+            reason = _friendly_fallback_reason(exc)
+    elif not settings.serpapi_enabled:
+        reason = "Live flight pricing isn't configured, so flight times and prices are estimates."
+    else:
+        unmatched = origin if not resolve_iata_code(origin) else destination
+        reason = f"Couldn't identify an airport for {unmatched}, so its flights are estimates."
+    return GeneratorFlightProvider().search(origin, destination, depart, adults, base_price), "generator", reason

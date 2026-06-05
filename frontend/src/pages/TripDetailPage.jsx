@@ -223,6 +223,9 @@ export default function TripDetailPage() {
     return <GlobeLoader fullscreen messages={OPTIONS_LOADER.messages} showTips title={OPTIONS_LOADER.title} />
   }
 
+  // Surface any "estimated data" notices recorded on the most recent itinerary run.
+  const travelNotices = latestItineraryRun?.output_payload?.travel_notices || []
+
   const nextSteps = [
     { label: 'Route options generated', done: trip.options.length > 0 },
     { label: 'Lock in your route direction', done: Boolean(trip.selected_option_id) },
@@ -514,6 +517,7 @@ export default function TripDetailPage() {
           <TravelJourneys
             bookingSavingKey={bookingSavingKey}
             journeys={trip.travel_journeys}
+            notices={travelNotices}
             onSelectJourney={handleBookingSelection}
             routeLocked={Boolean(trip.selected_journey_id)}
             selectedJourneyId={trip.selected_journey_id}
