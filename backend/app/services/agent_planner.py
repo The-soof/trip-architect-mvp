@@ -469,10 +469,18 @@ def _generate_structured_with_gemini(
                 thinking_budget=0
             )
 
+        # Force minified JSON to prevent infinite whitespace formatting loops (tabs/newlines)
+        minified_prompt = (
+            f"{prompt}\n\n"
+            "IMPORTANT: Output your response as compact, minified JSON. Do NOT pretty-print the JSON. "
+            "Do NOT use newlines, tabs, or consecutive spaces for formatting/indentation. "
+            "Generate the JSON on a single line or as compactly as possible, with no unnecessary whitespace."
+        )
+
         try:
             response = client.models.generate_content(
                 model=settings.gemini_model,
-                contents=prompt,
+                contents=minified_prompt,
                 config=types.GenerateContentConfig(**config_args),
             )
             if response.candidates:
@@ -1057,12 +1065,20 @@ class TripPlanner:
             for result in venue_places + hotel_places
             if result.place
         ]
+        trip_days = _trip_length(payload)
+        conciseness_instruction = ""
+        if trip_days > 30:
+            conciseness_instruction = (
+                f" Since this is an exceptionally long trip of {trip_days} days, please keep daily descriptions "
+                "reasonably concise (e.g., 2 to 3 sentences each) to keep the total output size healthy."
+            )
         return (
             "You are Trip Architect's itinerary synthesizer. Return only valid JSON. "
             "Use Layer 1 Tavily research plus Layer 2 Google Places facts to produce a useful, travelable day-by-day itinerary. "
             "Only mention specific named venues when they appear in the Google Places layer. "
             "Preserve slack on arrival and transfer days, and surface timing cautions when opening-hours context suggests them. "
-            "Ensure all generated descriptions and notes are diverse, detailed, natural, and completely free of repetitive language or infinite loops. "
+            "Ensure all generated descriptions and notes are diverse, detailed, natural, and completely free of repetitive language or infinite loops."
+            f"{conciseness_instruction} "
             f"Trip style: {payload.trip_style}. Route: {selected_option['destination_order']}. "
             f"Day allocation: {selected_option['days_by_stop']}. "
             f"Layer 1 Tavily research: {json.dumps(tavily_results, ensure_ascii=True)}. "
