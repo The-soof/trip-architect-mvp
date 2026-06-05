@@ -16,7 +16,15 @@ def _normalized_database_url(database_url: str) -> str:
     return database_url
 
 normalized_database_url = _normalized_database_url(settings.database_url)
-connect_args = {"check_same_thread": False} if settings.is_sqlite else {}
+if settings.is_sqlite:
+    connect_args: dict = {"check_same_thread": False}
+else:
+    # Fail fast instead of hanging the deploy:
+    #  - connect_timeout: a black-hole DB host errors in 10s rather than blocking forever.
+    #  - lock_timeout: a startup migration (CREATE/ALTER TABLE) that can't get its lock —
+    #    e.g. the previous container still holds it during a redeploy — aborts in 15s so the
+    #    retry loop can log it and try again, instead of silently hanging until Railway kills it.
+    connect_args = {"connect_timeout": 10, "options": "-c lock_timeout=15000"}
 engine_kwargs = {"future": True, "connect_args": connect_args}
 if not settings.is_sqlite:
     engine_kwargs.update({"pool_pre_ping": True, "pool_recycle": 300})
