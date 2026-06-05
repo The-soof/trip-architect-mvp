@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.config import get_settings
 from app.db.session import SessionLocal
@@ -40,14 +40,20 @@ def _bounded_confidence(value: object) -> str:
 
 
 def _trip_query():
+    # selectinload (not joinedload) for the collections: joining six one-to-many
+    # relations in one query produces a Cartesian product that explodes into millions
+    # of rows and OOMs the process at scale. selectinload issues one IN-query per
+    # relation instead. Mirrors the read path in app/api/trips.py.
     return (
         select(TripRequest)
         .options(
-            joinedload(TripRequest.options).joinedload(TripOption.itinerary).joinedload(Itinerary.days),
-            joinedload(TripRequest.itineraries).joinedload(Itinerary.days),
-            joinedload(TripRequest.flight_options),
-            joinedload(TripRequest.hotel_options),
-            joinedload(TripRequest.agent_runs),
+            selectinload(TripRequest.options).options(
+                joinedload(TripOption.itinerary).selectinload(Itinerary.days)
+            ),
+            selectinload(TripRequest.itineraries).selectinload(Itinerary.days),
+            selectinload(TripRequest.flight_options),
+            selectinload(TripRequest.hotel_options),
+            selectinload(TripRequest.agent_runs),
             joinedload(TripRequest.saved_trip),
         )
         .order_by(TripRequest.created_at.desc())
@@ -131,6 +137,12 @@ def recover_interrupted_trip_jobs() -> None:
                 ),
                 flush=True,
             )
+    except Exception as exc:  # noqa: BLE001 — recovery is best-effort; never block startup
+        print(
+            "trip_architect.jobs "
+            + json.dumps({"level": "ERROR", "message": "recover_failed", "detail": str(exc)[:300]}),
+            flush=True,
+        )
     finally:
         db.close()
 
