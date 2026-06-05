@@ -508,7 +508,7 @@ def _simplify_tavily_result(query: str, result: dict[str, Any]) -> dict[str, Any
     for row in result.get("results", [])[:3]:
         items.append(
             {
-                "title": row.get("title") or "Travel research result",
+                "title": " ".join(str(row.get("title") or "Travel research result").split()),
                 "url": row.get("url") or "about:blank",
                 "content": " ".join(str(row.get("content", "")).split())[:320],
             }
@@ -577,7 +577,7 @@ def _place_sources(results: list[PlaceLookupResult]) -> list[dict[str, str]]:
             continue
         sources.append(
             {
-                "title": result.place["name"],
+                "title": " ".join(str(result.place["name"] or "Google Place").split()),
                 "url": result.place["maps_url"],
                 "category": f"google_places_{result.category}",
                 "evidence_type": "researched_fact",
